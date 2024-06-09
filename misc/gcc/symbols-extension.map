@@ -1,0 +1,6 @@
+{
+    global:
+        gdcurl_extension_init;
+    local:
+        *;
+};
