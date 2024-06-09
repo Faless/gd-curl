@@ -34,6 +34,8 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 
+#include "http_client_curl.h"
+
 #ifdef _WIN32
 // See upstream godot-cpp GH-771.
 #undef GDN_EXPORT
@@ -42,15 +44,26 @@
 
 using namespace godot;
 
+static bool curl_ok = false;
+
 void register_webrtc_extension_types(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
+	}
+	CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
+	if (code != CURLE_OK) {
+		ERR_PRINT("Curl initialization failure");
+	} else {
+		curl_ok = true;
 	}
 }
 
 void unregister_webrtc_extension_types(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
+	}
+	if (curl_ok) {
+		curl_global_cleanup();
 	}
 }
 
