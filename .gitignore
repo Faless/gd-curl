@@ -1,0 +1,9 @@
+bin/*
+*.os
+*.a
+*.lib
+.sconsign.dblite
+*.obj
+*.swp
+__pycache__/*
+*.pyc
