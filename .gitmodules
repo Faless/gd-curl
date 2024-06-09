@@ -4,3 +4,6 @@
 [submodule "thirdparty/openssl"]
 	path = thirdparty/openssl
 	url = https://github.com/openssl/openssl.git
+[submodule "thirdparty/curl"]
+	path = thirdparty/curl
+	url = https://github.com/curl/curl.git
