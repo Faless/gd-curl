@@ -12,6 +12,7 @@ def validate_godotcpp_dir(key, val, env):
 
 env = Environment()
 opts = Variables(["customs.py"], ARGUMENTS)
+opts.Add(BoolVariable("compat", help="Enable pre-HTTPClientExtension compatibility mode", default=True))
 opts.Add(
     PathVariable(
         "godot_cpp",
@@ -25,6 +26,7 @@ opts.Update(env)
 sconstruct = env.get("godot_cpp", "godot-cpp") + "/SConstruct"
 cpp_env = SConscript(sconstruct)
 env = cpp_env.Clone()
+opts.Update(env)
 
 result_path = os.path.join("bin", "addons", "gdcurl")
 
@@ -32,6 +34,11 @@ result_path = os.path.join("bin", "addons", "gdcurl")
 env.Append(CPPDEFINES=["CURL_STATICLIB"])
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
+
+if env["compat"]:
+    sources += Glob("src/compat/*.cpp")
+    print([s.abspath for s in sources])
+    env.Append(CPPDEFINES=["HTTP_CLIENT_EXTENSION_COMPAT"])
 
 # Add our build tools
 for tool in ["openssl", "cmake", "curl"]:

@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.cpp                                                    */
+/*  http_client_extension.cpp                                             */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,68 +28,77 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include <gdextension_interface.h>
+// THIS FILE IS GENERATED. EDITS WILL BE LOST.
 
-#include <godot_cpp/classes/engine.hpp>
-#include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/core/defs.hpp>
-#include <godot_cpp/godot.hpp>
+#include "http_client_extension.hpp"
 
-#include "http_client_curl.h"
+#include <godot_cpp/classes/stream_peer.hpp>
+#include <godot_cpp/variant/variant.hpp>
 
-#ifdef _WIN32
-// See upstream godot-cpp GH-771.
-#undef GDN_EXPORT
-#define GDN_EXPORT __declspec(dllexport)
-#endif
+namespace godot {
 
-using namespace godot;
-
-static bool curl_ok = false;
-
-void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-	if (code != CURLE_OK) {
-		ERR_PRINT("Curl initialization failure");
-	} else {
-		curl_ok = true;
-	}
-
-#ifdef HTTP_CLIENT_EXTENSION_COMPAT
-	GDREGISTER_ABSTRACT_CLASS(TLSOptionsCompat);
-	GDREGISTER_ABSTRACT_CLASS(HTTPClientExtensionCompat);
-#endif
-
-	HTTPClientCurl::initialize();
-	GDREGISTER_CLASS(HTTPClientCurl);
-#ifndef HTTP_CLIENT_EXTENSION_COMPAT
-	if (!Engine::get_singleton()->is_editor_hint()) {
-		WARN_PRINT("Enabling cURL as default HTTPClient");
-		HTTPClient::set_default_extension("HTTPClientCurl");
-	}
-#endif
+Error HTTPClientExtensionCompat::_request(HTTPClient::Method method, const String &url, const PackedStringArray &headers, const uint8_t *body, int32_t body_size) {
+	return Error(0);
 }
 
-void unregister_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	if (curl_ok) {
-		curl_global_cleanup();
-	}
+Error HTTPClientExtensionCompat::_connect_to_host(const String &host, int32_t port, const Ref<TLSOptionsCompat> &tls_options) {
+	return Error(0);
 }
 
-extern "C" {
-GDExtensionBool GDE_EXPORT gdcurl_extension_init(const GDExtensionInterfaceGetProcAddress p_interface, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
-	GDExtensionBinding::InitObject init_obj(p_interface, p_library, r_initialization);
+void HTTPClientExtensionCompat::_set_connection(const Ref<StreamPeer> &connection) {}
 
-	init_obj.register_initializer(register_gdcurl_extension_types);
-	init_obj.register_terminator(unregister_gdcurl_extension_types);
-	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
+Ref<StreamPeer> HTTPClientExtensionCompat::_get_connection() const {
+	return Ref<StreamPeer>();
+}
 
-	return init_obj.init();
+void HTTPClientExtensionCompat::_close() {}
+
+HTTPClient::Status HTTPClientExtensionCompat::_get_status() const {
+	return HTTPClient::Status(0);
 }
+
+bool HTTPClientExtensionCompat::_has_response() const {
+	return false;
 }
+
+bool HTTPClientExtensionCompat::_is_response_chunked() const {
+	return false;
+}
+
+int32_t HTTPClientExtensionCompat::_get_response_code() const {
+	return 0;
+}
+
+PackedStringArray HTTPClientExtensionCompat::_get_response_headers() {
+	return PackedStringArray();
+}
+
+int64_t HTTPClientExtensionCompat::_get_response_body_length() const {
+	return 0;
+}
+
+PackedByteArray HTTPClientExtensionCompat::_read_response_body_chunk() {
+	return PackedByteArray();
+}
+
+void HTTPClientExtensionCompat::_set_blocking_mode(bool enabled) {}
+
+bool HTTPClientExtensionCompat::_is_blocking_mode_enabled() const {
+	return false;
+}
+
+void HTTPClientExtensionCompat::_set_read_chunk_size(int32_t chunk_size) {}
+
+int32_t HTTPClientExtensionCompat::_get_read_chunk_size() const {
+	return 0;
+}
+
+Error HTTPClientExtensionCompat::_poll() {
+	return Error(0);
+}
+
+void HTTPClientExtensionCompat::_set_http_proxy(const String &host, int32_t port) {}
+
+void HTTPClientExtensionCompat::_set_https_proxy(const String &host, int32_t port) {}
+
+} // namespace godot

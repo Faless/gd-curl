@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.cpp                                                    */
+/*  tls_options.cpp                                                       */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,68 +28,60 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include <gdextension_interface.h>
+// THIS FILE IS GENERATED. EDITS WILL BE LOST.
 
-#include <godot_cpp/classes/engine.hpp>
+#include "tls_options.hpp"
+
 #include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/core/defs.hpp>
-#include <godot_cpp/godot.hpp>
+#include <godot_cpp/core/engine_ptrcall.hpp>
+#include <godot_cpp/core/error_macros.hpp>
 
-#include "http_client_curl.h"
+namespace godot {
 
-#ifdef _WIN32
-// See upstream godot-cpp GH-771.
-#undef GDN_EXPORT
-#define GDN_EXPORT __declspec(dllexport)
-#endif
-
-using namespace godot;
-
-static bool curl_ok = false;
-
-void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-	if (code != CURLE_OK) {
-		ERR_PRINT("Curl initialization failure");
-	} else {
-		curl_ok = true;
-	}
-
-#ifdef HTTP_CLIENT_EXTENSION_COMPAT
-	GDREGISTER_ABSTRACT_CLASS(TLSOptionsCompat);
-	GDREGISTER_ABSTRACT_CLASS(HTTPClientExtensionCompat);
-#endif
-
-	HTTPClientCurl::initialize();
-	GDREGISTER_CLASS(HTTPClientCurl);
-#ifndef HTTP_CLIENT_EXTENSION_COMPAT
-	if (!Engine::get_singleton()->is_editor_hint()) {
-		WARN_PRINT("Enabling cURL as default HTTPClient");
-		HTTPClient::set_default_extension("HTTPClientCurl");
-	}
-#endif
+Ref<TLSOptionsCompat> TLSOptionsCompat::client(const Ref<X509Certificate> &trusted_chain, const String &common_name_override) {
+	Ref<TLSOptionsCompat> ref(memnew(TLSOptionsCompat));
+	ref->trusted_ca_chain = trusted_chain;
+	ref->common_name = common_name_override;
+	return ref;
 }
 
-void unregister_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	if (curl_ok) {
-		curl_global_cleanup();
-	}
+Ref<TLSOptionsCompat> TLSOptionsCompat::client_unsafe(const Ref<X509Certificate> &trusted_chain) {
+	Ref<TLSOptionsCompat> ref(memnew(TLSOptionsCompat));
+	ref->trusted_ca_chain = trusted_chain;
+	ref->unsafe_client = true;
+	return ref;
 }
 
-extern "C" {
-GDExtensionBool GDE_EXPORT gdcurl_extension_init(const GDExtensionInterfaceGetProcAddress p_interface, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
-	GDExtensionBinding::InitObject init_obj(p_interface, p_library, r_initialization);
-
-	init_obj.register_initializer(register_gdcurl_extension_types);
-	init_obj.register_terminator(unregister_gdcurl_extension_types);
-	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
-
-	return init_obj.init();
+Ref<TLSOptionsCompat> TLSOptionsCompat::server(const Ref<CryptoKey> &key, const Ref<X509Certificate> &certificate) {
+	Ref<TLSOptionsCompat> ref(memnew(TLSOptionsCompat));
+	ref->server_mode = true;
+	ref->own_certificate = certificate;
+	ref->private_key = key;
+	return ref;
 }
+
+bool TLSOptionsCompat::is_server() const {
+	return server_mode;
 }
+
+bool TLSOptionsCompat::is_unsafe_client() const {
+	return !server_mode && unsafe_client;
+}
+
+String TLSOptionsCompat::get_common_name() const {
+	return common_name;
+}
+
+Ref<X509Certificate> TLSOptionsCompat::get_trusted_ca_chain() const {
+	return trusted_ca_chain;
+}
+
+Ref<CryptoKey> TLSOptionsCompat::get_private_key() const {
+	return private_key;
+}
+
+Ref<CryptoKey> TLSOptionsCompat::get_own_certificate() const {
+	return own_certificate;
+}
+
+} // namespace godot
