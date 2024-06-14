@@ -1,0 +1,524 @@
+diff --git a/core/io/http_client.cpp b/core/io/http_client.cpp
+index 833fd1adc3..cfd8664014 100644
+--- a/core/io/http_client.cpp
++++ b/core/io/http_client.cpp
+@@ -42,7 +42,18 @@ const char *HTTPClient::_methods[METHOD_MAX] = {
+ 	"PATCH"
+ };
+ 
++StringName HTTPClient::default_extension;
++
++void HTTPClient::set_default_extension(const StringName &p_extension) {
++	ERR_FAIL_COND_MSG(p_extension != StringName() && !ClassDB::is_parent_class(p_extension, HTTPClientExtension::get_class_static()), vformat("Can't make %s the default HTTPClient extension since it does not extend HTTPClientExtension.", p_extension));
++	default_extension = StringName(p_extension, true);
++}
++
+ HTTPClient *HTTPClient::create() {
++	if (default_extension != StringName()) {
++		Object *obj = ClassDB::instantiate(default_extension);
++		return Object::cast_to<HTTPClientExtension>(obj);
++	}
+ 	if (_create) {
+ 		return _create();
+ 	}
+@@ -62,7 +73,7 @@ Error HTTPClient::_request_raw(Method p_method, const String &p_url, const Vecto
+ 	return request(p_method, p_url, p_headers, size > 0 ? p_body.ptr() : nullptr, size);
+ }
+ 
+-Error HTTPClient::_request(Method p_method, const String &p_url, const Vector<String> &p_headers, const String &p_body) {
++Error HTTPClient::_request_string(Method p_method, const String &p_url, const Vector<String> &p_headers, const String &p_body) {
+ 	CharString body_utf8 = p_body.utf8();
+ 	int size = body_utf8.length();
+ 	return request(p_method, p_url, p_headers, size > 0 ? (const uint8_t *)body_utf8.get_data() : nullptr, size);
+@@ -109,8 +120,7 @@ Error HTTPClient::verify_headers(const Vector<String> &p_headers) {
+ }
+ 
+ Dictionary HTTPClient::_get_response_headers_as_dictionary() {
+-	List<String> rh;
+-	get_response_headers(&rh);
++	PackedStringArray rh = get_response_headers();
+ 	Dictionary ret;
+ 	for (const String &s : rh) {
+ 		int sp = s.find(":");
+@@ -125,31 +135,20 @@ Dictionary HTTPClient::_get_response_headers_as_dictionary() {
+ 	return ret;
+ }
+ 
+-PackedStringArray HTTPClient::_get_response_headers() {
+-	List<String> rh;
+-	get_response_headers(&rh);
+-	PackedStringArray ret;
+-	ret.resize(rh.size());
+-	int idx = 0;
+-	for (const String &E : rh) {
+-		ret.set(idx++, E);
+-	}
+-
+-	return ret;
+-}
+-
+ void HTTPClient::_bind_methods() {
++	ClassDB::bind_static_method(get_class_static(), D_METHOD("set_default_extension", "extension_class"), &HTTPClientExtension::set_default_extension);
++
+ 	ClassDB::bind_method(D_METHOD("connect_to_host", "host", "port", "tls_options"), &HTTPClient::connect_to_host, DEFVAL(-1), DEFVAL(Ref<TLSOptions>()));
+ 	ClassDB::bind_method(D_METHOD("set_connection", "connection"), &HTTPClient::set_connection);
+ 	ClassDB::bind_method(D_METHOD("get_connection"), &HTTPClient::get_connection);
+ 	ClassDB::bind_method(D_METHOD("request_raw", "method", "url", "headers", "body"), &HTTPClient::_request_raw);
+-	ClassDB::bind_method(D_METHOD("request", "method", "url", "headers", "body"), &HTTPClient::_request, DEFVAL(String()));
++	ClassDB::bind_method(D_METHOD("request", "method", "url", "headers", "body"), &HTTPClient::_request_string, DEFVAL(String()));
+ 	ClassDB::bind_method(D_METHOD("close"), &HTTPClient::close);
+ 
+ 	ClassDB::bind_method(D_METHOD("has_response"), &HTTPClient::has_response);
+ 	ClassDB::bind_method(D_METHOD("is_response_chunked"), &HTTPClient::is_response_chunked);
+ 	ClassDB::bind_method(D_METHOD("get_response_code"), &HTTPClient::get_response_code);
+-	ClassDB::bind_method(D_METHOD("get_response_headers"), &HTTPClient::_get_response_headers);
++	ClassDB::bind_method(D_METHOD("get_response_headers"), &HTTPClient::get_response_headers);
+ 	ClassDB::bind_method(D_METHOD("get_response_headers_as_dictionary"), &HTTPClient::_get_response_headers_as_dictionary);
+ 	ClassDB::bind_method(D_METHOD("get_response_body_length"), &HTTPClient::get_response_body_length);
+ 	ClassDB::bind_method(D_METHOD("read_response_body_chunk"), &HTTPClient::read_response_body_chunk);
+@@ -263,3 +262,29 @@ void HTTPClient::_bind_methods() {
+ 	BIND_ENUM_CONSTANT(RESPONSE_NOT_EXTENDED);
+ 	BIND_ENUM_CONSTANT(RESPONSE_NETWORK_AUTH_REQUIRED);
+ }
++
++/// HTTPClientExtension
++void HTTPClientExtension::_bind_methods() {
++	ADD_PROPERTY_DEFAULT("read_chunk_size", 65536);
++	ADD_PROPERTY_DEFAULT("blocking_mode_enabled", false);
++
++	GDVIRTUAL_BIND(_request, "method", "url", "headers", "body", "body_size");
++	GDVIRTUAL_BIND(_connect_to_host, "host", "port", "tls_options");
++	GDVIRTUAL_BIND(_set_connection, "connection");
++	GDVIRTUAL_BIND(_get_connection);
++	GDVIRTUAL_BIND(_close);
++	GDVIRTUAL_BIND(_get_status);
++	GDVIRTUAL_BIND(_has_response);
++	GDVIRTUAL_BIND(_is_response_chunked);
++	GDVIRTUAL_BIND(_get_response_code);
++	GDVIRTUAL_BIND(_get_response_headers);
++	GDVIRTUAL_BIND(_get_response_body_length);
++	GDVIRTUAL_BIND(_read_response_body_chunk);
++	GDVIRTUAL_BIND(_set_blocking_mode, "enabled");
++	GDVIRTUAL_BIND(_is_blocking_mode_enabled);
++	GDVIRTUAL_BIND(_set_read_chunk_size, "chunk_size");
++	GDVIRTUAL_BIND(_get_read_chunk_size);
++	GDVIRTUAL_BIND(_poll);
++	GDVIRTUAL_BIND(_set_http_proxy, "host", "port");
++	GDVIRTUAL_BIND(_set_https_proxy, "host", "port");
++}
+diff --git a/core/io/http_client.h b/core/io/http_client.h
+index 9e018182e3..176440cdfa 100644
+--- a/core/io/http_client.h
++++ b/core/io/http_client.h
+@@ -37,6 +37,10 @@
+ #include "core/io/stream_peer_tcp.h"
+ #include "core/object/ref_counted.h"
+ 
++#include "core/extension/ext_wrappers.gen.inc"
++#include "core/object/gdvirtual.gen.inc"
++#include "core/variant/native_ptr.h"
++
+ class HTTPClient : public RefCounted {
+ 	GDCLASS(HTTPClient, RefCounted);
+ 
+@@ -143,6 +147,9 @@ public:
+ 
+ 	};
+ 
++private:
++	static StringName default_extension;
++
+ protected:
+ 	static const char *_methods[METHOD_MAX];
+ 	static const int HOST_MIN_LEN = 4;
+@@ -153,10 +160,9 @@ protected:
+ 
+ 	};
+ 
+-	PackedStringArray _get_response_headers();
+ 	Dictionary _get_response_headers_as_dictionary();
+ 	Error _request_raw(Method p_method, const String &p_url, const Vector<String> &p_headers, const Vector<uint8_t> &p_body);
+-	Error _request(Method p_method, const String &p_url, const Vector<String> &p_headers, const String &p_body = String());
++	Error _request_string(Method p_method, const String &p_url, const Vector<String> &p_headers, const String &p_body = String());
+ 
+ 	static HTTPClient *(*_create)();
+ 
+@@ -165,11 +171,13 @@ protected:
+ public:
+ 	static HTTPClient *create();
+ 
++	static void set_default_extension(const StringName &p_name);
++
+ 	String query_string_from_dict(const Dictionary &p_dict);
+ 	Error verify_headers(const Vector<String> &p_headers);
+ 
+ 	virtual Error request(Method p_method, const String &p_url, const Vector<String> &p_headers, const uint8_t *p_body, int p_body_size) = 0;
+-	virtual Error connect_to_host(const String &p_host, int p_port = -1, Ref<TLSOptions> p_tls_options = Ref<TLSOptions>()) = 0;
++	virtual Error connect_to_host(const String &p_host, int p_port = -1, const Ref<TLSOptions> &p_tls_options = Ref<TLSOptions>()) = 0;
+ 
+ 	virtual void set_connection(const Ref<StreamPeer> &p_connection) = 0;
+ 	virtual Ref<StreamPeer> get_connection() const = 0;
+@@ -181,7 +189,7 @@ public:
+ 	virtual bool has_response() const = 0;
+ 	virtual bool is_response_chunked() const = 0;
+ 	virtual int get_response_code() const = 0;
+-	virtual Error get_response_headers(List<String> *r_response) = 0;
++	virtual PackedStringArray get_response_headers() = 0;
+ 	virtual int64_t get_response_body_length() const = 0;
+ 
+ 	virtual PackedByteArray read_response_body_chunk() = 0; // Can't get body as partial text because of most encodings UTF8, gzip, etc.
+@@ -206,4 +214,50 @@ VARIANT_ENUM_CAST(HTTPClient::ResponseCode)
+ VARIANT_ENUM_CAST(HTTPClient::Method);
+ VARIANT_ENUM_CAST(HTTPClient::Status);
+ 
++class HTTPClientExtension : public HTTPClient {
++	GDCLASS(HTTPClientExtension, HTTPClient);
++
++protected:
++	static void _bind_methods();
++
++public:
++	virtual Error request(Method p_method, const String &p_url, const Vector<String> &p_headers, const uint8_t *p_body, int p_body_size) override {
++		Error err;
++		if (GDVIRTUAL_CALL(_request, p_method, p_url, p_headers, p_body, p_body_size, err)) {
++			return err;
++		}
++		return FAILED;
++	}
++	GDVIRTUAL5R(Error, _request, Method, const String &, const Vector<String> &, GDExtensionConstPtr<const uint8_t>, int);
++
++	EXBIND3R(Error, connect_to_host, const String &, int, const Ref<TLSOptions> &);
++
++	EXBIND1(set_connection, const Ref<StreamPeer> &);
++	EXBIND0RC(Ref<StreamPeer>, get_connection);
++
++	EXBIND0(close);
++
++	EXBIND0RC(Status, get_status);
++
++	EXBIND0RC(bool, has_response);
++	EXBIND0RC(bool, is_response_chunked);
++	EXBIND0RC(int, get_response_code);
++	EXBIND0R(PackedStringArray, get_response_headers);
++
++	EXBIND0RC(int64_t, get_response_body_length);
++	EXBIND0R(PackedByteArray, read_response_body_chunk);
++
++	EXBIND1(set_blocking_mode, bool);
++	EXBIND0RC(bool, is_blocking_mode_enabled);
++
++	EXBIND1(set_read_chunk_size, int);
++	EXBIND0RC(int, get_read_chunk_size);
++
++	EXBIND0R(Error, poll);
++
++	// Use empty string or -1 to unset
++	EXBIND2(set_http_proxy, const String &, int);
++	EXBIND2(set_https_proxy, const String &, int);
++};
++
+ #endif // HTTP_CLIENT_H
+diff --git a/core/io/http_client_tcp.cpp b/core/io/http_client_tcp.cpp
+index 2f45238951..13157b5dc5 100644
+--- a/core/io/http_client_tcp.cpp
++++ b/core/io/http_client_tcp.cpp
+@@ -39,7 +39,7 @@ HTTPClient *HTTPClientTCP::_create_func() {
+ 	return memnew(HTTPClientTCP);
+ }
+ 
+-Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, Ref<TLSOptions> p_options) {
++Error HTTPClientTCP::connect_to_host(const String &p_host, int p_port, const Ref<TLSOptions> &p_options) {
+ 	close();
+ 
+ 	conn_port = p_port;
+@@ -229,18 +229,12 @@ int HTTPClientTCP::get_response_code() const {
+ 	return response_num;
+ }
+ 
+-Error HTTPClientTCP::get_response_headers(List<String> *r_response) {
+-	if (!response_headers.size()) {
+-		return ERR_INVALID_PARAMETER;
+-	}
+-
+-	for (int i = 0; i < response_headers.size(); i++) {
+-		r_response->push_back(response_headers[i]);
+-	}
+-
++PackedStringArray HTTPClientTCP::get_response_headers() {
++	ERR_FAIL_COND_V(response_headers.is_empty(), response_headers);
++	PackedStringArray out;
++	out.append_array(response_headers);
+ 	response_headers.clear();
+-
+-	return OK;
++	return out;
+ }
+ 
+ void HTTPClientTCP::close() {
+diff --git a/core/io/http_client_tcp.h b/core/io/http_client_tcp.h
+index 6060c975bc..51d9ebe8cc 100644
+--- a/core/io/http_client_tcp.h
++++ b/core/io/http_client_tcp.h
+@@ -80,7 +80,7 @@ public:
+ 
+ 	Error request(Method p_method, const String &p_url, const Vector<String> &p_headers, const uint8_t *p_body, int p_body_size) override;
+ 
+-	Error connect_to_host(const String &p_host, int p_port = -1, Ref<TLSOptions> p_tls_options = Ref<TLSOptions>()) override;
++	Error connect_to_host(const String &p_host, int p_port = -1, const Ref<TLSOptions> &p_tls_options = Ref<TLSOptions>()) override;
+ 	void set_connection(const Ref<StreamPeer> &p_connection) override;
+ 	Ref<StreamPeer> get_connection() const override;
+ 	void close() override;
+@@ -88,7 +88,7 @@ public:
+ 	bool has_response() const override;
+ 	bool is_response_chunked() const override;
+ 	int get_response_code() const override;
+-	Error get_response_headers(List<String> *r_response) override;
++	PackedStringArray get_response_headers() override;
+ 	int64_t get_response_body_length() const override;
+ 	PackedByteArray read_response_body_chunk() override;
+ 	void set_blocking_mode(bool p_enable) override;
+diff --git a/core/register_core_types.cpp b/core/register_core_types.cpp
+index 8a55e4de8f..da3649fe11 100644
+--- a/core/register_core_types.cpp
++++ b/core/register_core_types.cpp
+@@ -206,6 +206,7 @@ void register_core_types() {
+ 	GDREGISTER_ABSTRACT_CLASS(WorkerThreadPool);
+ 
+ 	ClassDB::register_custom_instance_class<HTTPClient>();
++	GDREGISTER_CLASS(HTTPClientExtension);
+ 
+ 	// Crypto
+ 	GDREGISTER_CLASS(HashingContext);
+diff --git a/doc/classes/HTTPClient.xml b/doc/classes/HTTPClient.xml
+index b6007a3b6b..df3329f2e4 100644
+--- a/doc/classes/HTTPClient.xml
++++ b/doc/classes/HTTPClient.xml
+@@ -177,6 +177,13 @@
+ 				Sends the body data raw, as a byte array and does not encode it in any way.
+ 			</description>
+ 		</method>
++		<method name="set_default_extension" qualifiers="static">
++			<return type="void" />
++			<param index="0" name="extension_class" type="StringName" />
++			<description>
++				Sets the [param extension_class] as the default [HTTPClientExtension] returned when creating a new [HTTPClient].
++			</description>
++		</method>
+ 		<method name="set_http_proxy">
+ 			<return type="void" />
+ 			<param index="0" name="host" type="String" />
+diff --git a/doc/classes/HTTPClientExtension.xml b/doc/classes/HTTPClientExtension.xml
+new file mode 100644
+index 0000000000..91b86cb961
+--- /dev/null
++++ b/doc/classes/HTTPClientExtension.xml
+@@ -0,0 +1,121 @@
++<?xml version="1.0" encoding="UTF-8" ?>
++<class name="HTTPClientExtension" inherits="HTTPClient" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
++	<brief_description>
++	</brief_description>
++	<description>
++	</description>
++	<tutorials>
++	</tutorials>
++	<methods>
++		<method name="_close" qualifiers="virtual">
++			<return type="void" />
++			<description>
++			</description>
++		</method>
++		<method name="_connect_to_host" qualifiers="virtual">
++			<return type="int" enum="Error" />
++			<param index="0" name="host" type="String" />
++			<param index="1" name="port" type="int" />
++			<param index="2" name="tls_options" type="TLSOptions" />
++			<description>
++			</description>
++		</method>
++		<method name="_get_connection" qualifiers="virtual const">
++			<return type="StreamPeer" />
++			<description>
++			</description>
++		</method>
++		<method name="_get_read_chunk_size" qualifiers="virtual const">
++			<return type="int" />
++			<description>
++			</description>
++		</method>
++		<method name="_get_response_body_length" qualifiers="virtual const">
++			<return type="int" />
++			<description>
++			</description>
++		</method>
++		<method name="_get_response_code" qualifiers="virtual const">
++			<return type="int" />
++			<description>
++			</description>
++		</method>
++		<method name="_get_response_headers" qualifiers="virtual const">
++			<return type="PackedStringArray" />
++			<description>
++			</description>
++		</method>
++		<method name="_get_status" qualifiers="virtual const">
++			<return type="int" enum="HTTPClient.Status" />
++			<description>
++			</description>
++		</method>
++		<method name="_has_response" qualifiers="virtual const">
++			<return type="bool" />
++			<description>
++			</description>
++		</method>
++		<method name="_is_blocking_mode_enabled" qualifiers="virtual const">
++			<return type="bool" />
++			<description>
++			</description>
++		</method>
++		<method name="_is_response_chunked" qualifiers="virtual const">
++			<return type="bool" />
++			<description>
++			</description>
++		</method>
++		<method name="_poll" qualifiers="virtual">
++			<return type="int" enum="Error" />
++			<description>
++			</description>
++		</method>
++		<method name="_read_response_body_chunk" qualifiers="virtual">
++			<return type="PackedByteArray" />
++			<description>
++			</description>
++		</method>
++		<method name="_request" qualifiers="virtual">
++			<return type="int" enum="Error" />
++			<param index="0" name="method" type="int" enum="HTTPClient.Method" />
++			<param index="1" name="url" type="String" />
++			<param index="2" name="headers" type="PackedStringArray" />
++			<param index="3" name="body" type="const uint8_t*" />
++			<param index="4" name="body_size" type="int" />
++			<description>
++			</description>
++		</method>
++		<method name="_set_blocking_mode" qualifiers="virtual">
++			<return type="void" />
++			<param index="0" name="enabled" type="bool" />
++			<description>
++			</description>
++		</method>
++		<method name="_set_connection" qualifiers="virtual">
++			<return type="void" />
++			<param index="0" name="connection" type="StreamPeer" />
++			<description>
++			</description>
++		</method>
++		<method name="_set_http_proxy" qualifiers="virtual">
++			<return type="void" />
++			<param index="0" name="host" type="String" />
++			<param index="1" name="port" type="int" />
++			<description>
++			</description>
++		</method>
++		<method name="_set_https_proxy" qualifiers="virtual">
++			<return type="void" />
++			<param index="0" name="host" type="String" />
++			<param index="1" name="port" type="int" />
++			<description>
++			</description>
++		</method>
++		<method name="_set_read_chunk_size" qualifiers="virtual">
++			<return type="void" />
++			<param index="0" name="chunk_size" type="int" />
++			<description>
++			</description>
++		</method>
++	</methods>
++</class>
+diff --git a/platform/web/http_client_web.cpp b/platform/web/http_client_web.cpp
+index ea9226a5a4..2d510d414d 100644
+--- a/platform/web/http_client_web.cpp
++++ b/platform/web/http_client_web.cpp
+@@ -37,7 +37,7 @@ void HTTPClientWeb::_parse_headers(int p_len, const char **p_headers, void *p_re
+ 	}
+ }
+ 
+-Error HTTPClientWeb::connect_to_host(const String &p_host, int p_port, Ref<TLSOptions> p_tls_options) {
++Error HTTPClientWeb::connect_to_host(const String &p_host, int p_port, const Ref<TLSOptions> &p_tls_options) {
+ 	ERR_FAIL_COND_V(p_tls_options.is_valid() && p_tls_options->is_server(), ERR_INVALID_PARAMETER);
+ 
+ 	close();
+@@ -137,15 +137,12 @@ int HTTPClientWeb::get_response_code() const {
+ 	return polled_response_code;
+ }
+ 
+-Error HTTPClientWeb::get_response_headers(List<String> *r_response) {
+-	if (!response_headers.size()) {
+-		return ERR_INVALID_PARAMETER;
+-	}
+-	for (int i = 0; i < response_headers.size(); i++) {
+-		r_response->push_back(response_headers[i]);
+-	}
++PackedStringArray HTTPClientWeb::get_response_headers() {
++	ERR_FAIL_COND_V(response_headers.is_empty(), response_headers);
++	PackedStringArray out;
++	out.append_array(response_headers);
+ 	response_headers.clear();
+-	return OK;
++	return out;
+ }
+ 
+ int64_t HTTPClientWeb::get_response_body_length() const {
+diff --git a/platform/web/http_client_web.h b/platform/web/http_client_web.h
+index 4d3c457a7d..c8cbd29653 100644
+--- a/platform/web/http_client_web.h
++++ b/platform/web/http_client_web.h
+@@ -85,7 +85,7 @@ public:
+ 
+ 	Error request(Method p_method, const String &p_url, const Vector<String> &p_headers, const uint8_t *p_body, int p_body_size) override;
+ 
+-	Error connect_to_host(const String &p_host, int p_port = -1, Ref<TLSOptions> p_tls_options = Ref<TLSOptions>()) override;
++	Error connect_to_host(const String &p_host, int p_port = -1, const Ref<TLSOptions> &p_tls_options = Ref<TLSOptions>()) override;
+ 	void set_connection(const Ref<StreamPeer> &p_connection) override;
+ 	Ref<StreamPeer> get_connection() const override;
+ 	void close() override;
+@@ -93,7 +93,7 @@ public:
+ 	bool has_response() const override;
+ 	bool is_response_chunked() const override;
+ 	int get_response_code() const override;
+-	Error get_response_headers(List<String> *r_response) override;
++	PackedStringArray get_response_headers() override;
+ 	int64_t get_response_body_length() const override;
+ 	PackedByteArray read_response_body_chunk() override;
+ 	void set_blocking_mode(bool p_enable) override;
+diff --git a/scene/main/http_request.cpp b/scene/main/http_request.cpp
+index 3469b806a6..2884322732 100644
+--- a/scene/main/http_request.cpp
++++ b/scene/main/http_request.cpp
+@@ -216,17 +216,11 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
+ 
+ 	got_response = true;
+ 	response_code = client->get_response_code();
+-	List<String> rheaders;
+-	client->get_response_headers(&rheaders);
+-	response_headers.clear();
++	response_headers = client->get_response_headers();
+ 	downloaded.set(0);
+ 	final_body_size.set(0);
+ 	decompressor.unref();
+ 
+-	for (const String &E : rheaders) {
+-		response_headers.push_back(E);
+-	}
+-
+ 	if (response_code == 301 || response_code == 302) {
+ 		// Handle redirect.
+ 
+@@ -238,7 +232,7 @@ bool HTTPRequest::_handle_response(bool *ret_value) {
+ 
+ 		String new_request;
+ 
+-		for (const String &E : rheaders) {
++		for (const String &E : response_headers) {
+ 			if (E.containsn("Location: ")) {
+ 				new_request = E.substr(9, E.length()).strip_edges();
+ 			}
