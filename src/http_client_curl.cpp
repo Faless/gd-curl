@@ -289,17 +289,18 @@ Error HTTPClientCurl::_init_request_headers(CURL *p_chandler, Vector<String> p_h
 	curl_slist *curl_headers = nullptr;
 	for (int i = 0; i < p_headers.size(); i++) {
 		curl_headers = curl_slist_append(curl_headers, p_headers[i].ascii().get_data());
+		String h = p_headers[i].to_lower();
 
-		if (add_host && p_headers[i].findn("Host:") == 0) {
+		if (add_host && h.findn("host:") == 0) {
 			add_host = false;
 		}
-		if (add_clen && p_headers[i].findn("Content-Length:") == 0) {
+		if (add_clen && h.findn("content-length:") == 0) {
 			add_clen = false;
 		}
-		if (add_uagent && p_headers[i].findn("User-Agent:") == 0) {
+		if (add_uagent && h.findn("user-agent:") == 0) {
 			add_uagent = false;
 		}
-		if (add_accept && p_headers[i].findn("Accept:") == 0) {
+		if (add_accept && h.findn("accept:") == 0) {
 			add_accept = false;
 		}
 	}
