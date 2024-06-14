@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.cpp                                                    */
+/*  compat.cpp                                                            */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,74 +28,73 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include <gdextension_interface.h>
+#include "compat.hpp"
 
-#include <godot_cpp/classes/engine.hpp>
-#include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/core/defs.hpp>
-#include <godot_cpp/godot.hpp>
+namespace godot {
 
-#include "http_client_curl.h"
-
-#ifdef HTTP_CLIENT_EXTENSION_COMPAT
-#include "compat/http_request.hpp"
-#endif
-
-#ifdef _WIN32
-// See upstream godot-cpp GH-771.
-#undef GDN_EXPORT
-#define GDN_EXPORT __declspec(dllexport)
-#endif
-
-using namespace godot;
-
-static bool curl_ok = false;
-
-void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
+Error godot_parse_url(const String &p_base, String &r_scheme, String &r_host, int &r_port, String &r_path) {
+	// Splits the URL into scheme, host, port, path. Strip credentials when present.
+	String base = p_base;
+	r_scheme = "";
+	r_host = "";
+	r_port = 0;
+	r_path = "";
+	int pos = base.find("://");
+	// Scheme
+	if (pos != -1) {
+		r_scheme = base.substr(0, pos + 3).to_lower();
+		base = base.substr(pos + 3, base.length() - pos - 3);
 	}
-	CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-	if (code != CURLE_OK) {
-		ERR_PRINT("Curl initialization failure");
+	pos = base.find("/");
+	// Path
+	if (pos != -1) {
+		r_path = base.substr(pos, base.length() - pos);
+		base = base.substr(0, pos);
+	}
+	// Host
+	pos = base.find("@");
+	if (pos != -1) {
+		// Strip credentials
+		base = base.substr(pos + 1, base.length() - pos - 1);
+	}
+	if (base.begins_with("[")) {
+		// Literal IPv6
+		pos = base.rfind("]");
+		if (pos == -1) {
+			return ERR_INVALID_PARAMETER;
+		}
+		r_host = base.substr(1, pos - 1);
+		base = base.substr(pos + 1, base.length() - pos - 1);
 	} else {
-		curl_ok = true;
+		// Anything else
+		if (base.get_slice_count(":") > 2) {
+			return ERR_INVALID_PARAMETER;
+		}
+		pos = base.rfind(":");
+		if (pos == -1) {
+			r_host = base;
+			base = "";
+		} else {
+			r_host = base.substr(0, pos);
+			base = base.substr(pos, base.length() - pos);
+		}
 	}
-
-#ifdef HTTP_CLIENT_EXTENSION_COMPAT
-	GDREGISTER_ABSTRACT_CLASS(TLSOptionsCompat);
-	GDREGISTER_ABSTRACT_CLASS(HTTPClientExtensionCompat);
-#endif
-
-	HTTPClientCurl::initialize();
-	GDREGISTER_CLASS(HTTPClientCurl);
-#ifndef HTTP_CLIENT_EXTENSION_COMPAT
-	if (!Engine::get_singleton()->is_editor_hint()) {
-		WARN_PRINT("Enabling cURL as default HTTPClient");
-		HTTPClient::set_default_extension("HTTPClientCurl");
+	if (r_host.is_empty()) {
+		return ERR_INVALID_PARAMETER;
 	}
-#else
-	GDREGISTER_CLASS(HTTPRequestCompat);
-#endif
+	r_host = r_host.to_lower();
+	// Port
+	if (base.begins_with(":")) {
+		base = base.substr(1, base.length() - 1);
+		if (!base.is_valid_int()) {
+			return ERR_INVALID_PARAMETER;
+		}
+		r_port = base.to_int();
+		if (r_port < 1 || r_port > 65535) {
+			return ERR_INVALID_PARAMETER;
+		}
+	}
+	return OK;
 }
 
-void unregister_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	if (curl_ok) {
-		curl_global_cleanup();
-	}
-}
-
-extern "C" {
-GDExtensionBool GDE_EXPORT gdcurl_extension_init(const GDExtensionInterfaceGetProcAddress p_interface, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
-	GDExtensionBinding::InitObject init_obj(p_interface, p_library, r_initialization);
-
-	init_obj.register_initializer(register_gdcurl_extension_types);
-	init_obj.register_terminator(unregister_gdcurl_extension_types);
-	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
-
-	return init_obj.init();
-}
-}
+} //namespace godot
