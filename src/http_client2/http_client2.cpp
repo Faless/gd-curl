@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  register_types.cpp                                                    */
+/*  http_client2.cpp                                                      */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -28,82 +28,25 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#include <gdextension_interface.h>
+#include "http_client2.h"
 
-#include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/core/class_db.hpp>
-#include <godot_cpp/core/defs.hpp>
-#include <godot_cpp/godot.hpp>
-
-#include "http_client_curl.h"
-
-#include "http_client2/http_client2_curl.h"
-
-#ifdef HTTP_CLIENT_EXTENSION_COMPAT
-#include "compat/http_request.hpp"
-#endif
-
-#ifdef _WIN32
-// See upstream godot-cpp GH-771.
-#undef GDN_EXPORT
-#define GDN_EXPORT __declspec(dllexport)
-#endif
 
 using namespace godot;
 
-static bool curl_ok = false;
-
-void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-	if (code != CURLE_OK) {
-		ERR_PRINT("Curl initialization failure");
-	} else {
-		curl_ok = true;
-	}
-
-#ifdef HTTP_CLIENT_EXTENSION_COMPAT
-	GDREGISTER_ABSTRACT_CLASS(TLSOptionsCompat);
-	GDREGISTER_ABSTRACT_CLASS(HTTPClientExtensionCompat);
-#endif
-
-	GDREGISTER_ABSTRACT_CLASS(HTTPClient2);
-	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2);
-
-	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2Curl); // TODO Not needed?
-	GDREGISTER_CLASS(HTTPClient2Curl);
-
-	HTTPClientCurl::initialize();
-	GDREGISTER_CLASS(HTTPClientCurl);
-#ifndef HTTP_CLIENT_EXTENSION_COMPAT
-	if (!Engine::get_singleton()->is_editor_hint()) {
-		WARN_PRINT("Enabling cURL as default HTTPClient");
-		HTTPClient::set_default_extension("HTTPClientCurl");
-	}
-#else
-	GDREGISTER_CLASS(HTTPRequestCompat);
-#endif
+void HTTPRequest2::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_headers"), &HTTPRequest2::get_headers);
+	ClassDB::bind_method(D_METHOD("has_headers"), &HTTPRequest2::has_headers);
+	ClassDB::bind_method(D_METHOD("has_response"), &HTTPRequest2::has_response);
+	ClassDB::bind_method(D_METHOD("get_response"), &HTTPRequest2::get_response);
+	ADD_SIGNAL(MethodInfo("completed"));
 }
 
-void unregister_gdcurl_extension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
-		return;
-	}
-	if (curl_ok) {
-		curl_global_cleanup();
-	}
-}
-
-extern "C" {
-GDExtensionBool GDE_EXPORT gdcurl_extension_init(const GDExtensionInterfaceGetProcAddress p_interface, const GDExtensionClassLibraryPtr p_library, GDExtensionInitialization *r_initialization) {
-	GDExtensionBinding::InitObject init_obj(p_interface, p_library, r_initialization);
-
-	init_obj.register_initializer(register_gdcurl_extension_types);
-	init_obj.register_terminator(unregister_gdcurl_extension_types);
-	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
-
-	return init_obj.init();
-}
+void HTTPClient2::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("fetch", "url", "method", "headers", "request_data"), &HTTPClient2::fetch, DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedStringArray()), DEFVAL(PackedByteArray()));
+	ClassDB::bind_method(D_METHOD("cancel"), &HTTPClient2::cancel);
+	ClassDB::bind_method(D_METHOD("poll"), &HTTPClient2::poll);
+	ClassDB::bind_method(D_METHOD("set_tls_options", "tls_options"), &HTTPClient2::set_tls_options);
+	ClassDB::bind_method(D_METHOD("get_tls_options"), &HTTPClient2::get_tls_options);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "tls_options", PROPERTY_HINT_RESOURCE_TYPE, "TLSOptions"), "set_tls_options", "get_tls_options");
 }

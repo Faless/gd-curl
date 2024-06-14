@@ -33,7 +33,7 @@ result_path = os.path.join("bin", "addons", "gdcurl")
 # Our includes and sources
 env.Append(CPPDEFINES=["CURL_STATICLIB"])
 env.Append(CPPPATH=["src/"])
-sources = Glob("src/*.cpp")
+sources = Glob("src/*.cpp") + Glob("src/http_client2/*.cpp")
 
 if env["compat"]:
     sources += Glob("src/compat/*.cpp")
