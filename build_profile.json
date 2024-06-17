@@ -1,0 +1,19 @@
+{
+	"enabled_classes": [
+		"IP",
+		"RefCounted",
+		"ProjectSettings",
+		"HTTPClientExtension",
+		"StreamPeerBuffer",
+		"StreamPeerGZIP",
+		"Node",
+		"OS",
+		"Engine",
+		"StreamPeerBuffer",
+		"X509Certificate",
+		"TLSOptions",
+		"Thread",
+		"Timer",
+		"FileAccess"
+	]
+}

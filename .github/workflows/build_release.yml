@@ -1,0 +1,255 @@
+name: 🔧 Build -> Package 📦
+on: [push, pull_request]
+
+env:
+  # Only used for the cache key. Increment version to force clean build.
+  GODOT_BASE_BRANCH: master
+
+jobs:
+  static-checks:
+    name: 📊 Static Checks (clang-format, black format, file format)
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          # Add clang repository (so we have clang-format-14)
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo apt-add-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-14 main"
+          sudo apt-get update
+          # Install required deps
+          sudo apt-get install -qq dos2unix moreutils recode clang-format-14
+          sudo update-alternatives --remove-all clang-format
+          sudo update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-14 100
+          sudo pip3 install black==22.3.0 pygments
+
+      - name: File formatting checks (file_format.sh)
+        run: |
+          bash ./misc/scripts/file_format.sh
+
+      - name: Style checks via clang-format (clang_format.sh)
+        run: |
+          bash ./misc/scripts/clang_format.sh
+
+      - name: Python style checks via black (black_format.sh)
+        run: |
+          bash ./misc/scripts/black_format.sh
+
+  build:
+    runs-on: ${{ matrix.os }}
+    name: 🔧 Build
+    needs: static-checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Android
+          - platform: android
+            arch: 'x86_64'
+            sconsflags: 'ANDROID_HOME='
+            os: 'ubuntu-20.04'
+            cache-name: android-x86_64
+          - platform: android
+            arch: 'arm64'
+            sconsflags: 'ANDROID_HOME='
+            os: 'ubuntu-20.04'
+            cache-name: android-arm64
+
+          # iOS
+          - platform: ios
+            arch: 'x86_64'
+            sconsflags: 'ios_simulator=true'
+            os: 'macos-12'
+            cache-name: ios-x86_64-simulator
+          - platform: ios
+            arch: 'arm64'
+            sconsflags: ''
+            os: 'macos-12'
+            cache-name: ios-arm64
+
+          # Linux
+          - platform: linux
+            arch: 'x86_32'
+            buildroot: 'i686-godot-linux-gnu_sdk-buildroot'
+            sconsflags: ''
+            os: 'ubuntu-20.04'
+            cache-name: linux-x86_32
+          - platform: linux
+            arch: 'x86_64'
+            buildroot: 'x86_64-godot-linux-gnu_sdk-buildroot'
+            sconsflags: ''
+            os: 'ubuntu-20.04'
+            cache-name: linux-x86_64
+          - platform: linux
+            arch: 'arm32'
+            buildroot: 'arm-godot-linux-gnueabihf_sdk-buildroot'
+            sconsflags: ''
+            os: 'ubuntu-20.04'
+            cache-name: linux-arm32
+          - platform: linux
+            arch: 'arm64'
+            buildroot: 'aarch64-godot-linux-gnu_sdk-buildroot'
+            sconsflags: ''
+            os: 'ubuntu-20.04'
+            cache-name: linux-arm64
+
+          # macOS
+          - platform: macos
+            arch: 'universal'
+            sconsflags: ''
+            os: 'macos-12'
+            cache-name: macos-universal
+
+          # Windows
+          - platform: windows
+            arch: 'x86_32'
+            sconsflags: 'use_mingw=yes'
+            os: 'ubuntu-20.04'
+            msvc_arch: amd64_x86
+            cache-name: win-x86_32
+          - platform: windows
+            arch: 'x86_64'
+            sconsflags: 'use_mingw=yes'
+            os: 'ubuntu-20.04'
+            msvc_arch: amd64
+            cache-name: win-x86_64
+
+    env:
+      SCONS_CACHE: ${{ github.workspace }}/.scons-cache/
+      SCONSFLAGS: ${{ matrix.sconsflags }} platform=${{ matrix.platform }} arch=${{ matrix.arch }} build_profile=build_profile.json --jobs=2
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Godot build cache
+        uses: ./.github/actions/godot-cache
+        with:
+          cache-name: ${{ matrix.cache-name }}
+        continue-on-error: true
+
+      - name: Install Windows build dependencies
+        if: ${{ matrix.platform == 'windows' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential mingw-w64
+          sudo update-alternatives --set i686-w64-mingw32-gcc /usr/bin/i686-w64-mingw32-gcc-posix
+          sudo update-alternatives --set i686-w64-mingw32-g++ /usr/bin/i686-w64-mingw32-g++-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+          dpkg -l | grep ii | grep mingw
+          update-alternatives --get-selections | grep mingw
+
+      - name: Install Linux build dependencies
+        if: ${{ matrix.platform == 'linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential gcc-multilib g++-multilib wget
+
+      - name: Setup Linux buildroot toolchain cache
+        if: ${{ matrix.platform == 'linux' }}
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ matrix.buildroot }}.tar.bz2
+          key: linux-${{ matrix.buildroot }}-buildroot
+
+      - name: Android dependencies
+        id: android-setup-ndk
+        if: ${{ matrix.platform == 'android' }}
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r23c
+          add-to-path: true
+
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+          architecture: 'x64'
+
+      - name: Configuring Python packages
+        run: |
+          python -c "import sys; print(sys.version)"
+          python -m pip install scons
+
+      - name: Setup Linux toolchains
+        if: ${{ matrix.platform == 'linux' }}
+        run: |
+          if [ ! -f ${{ matrix.buildroot }}.tar.bz2 ]; then
+            wget https://downloads.tuxfamily.org/godotengine/toolchains/linux/${{ matrix.buildroot }}.tar.bz2
+          fi
+          tar -xjf ${{ matrix.buildroot }}.tar.bz2
+          ${{ matrix.buildroot }}/relocate-sdk.sh
+          echo "$GITHUB_WORKSPACE/${{ matrix.buildroot }}/bin" >> $GITHUB_PATH
+          echo "PKG_CONFIG=$GITHUB_WORKSPACE/${{ matrix.buildroot }}/share/pkgconfig/" >> $GITHUB_ENV
+
+      - name: Patch godot-cpp to support build profile.
+        run: |
+          patch -p1 < misc/patches/build_profile.diff
+
+      - name: Print tools versions
+        run: |
+          python --version
+          scons --version
+          cmake --version
+
+      - name: Compile Extension - template_debug - ${{ matrix.platform }} - ${{ matrix.arch }}
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.android-setup-ndk.outputs.ndk-path }}
+        run: |
+          scons target=template_debug
+
+      - name: Compile Extension - template_release - ${{ matrix.platform }} - ${{ matrix.arch }}
+        env:
+          ANDROID_NDK_ROOT: ${{ steps.android-setup-ndk.outputs.ndk-path }}
+        run: |
+          scons target=template_release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.job }}-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            bin/
+            !bin/thirdparty/
+
+  package:
+    name: 📦 Package
+    needs: build
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Bundle licenses.
+        run: |
+          cp LICENSE artifacts/LICENSE.gdcurl
+          cp thirdparty/curl/COPYING artifacts/LICENSE.curl
+          cp thirdparty/openssl/LICENSE.txt artifacts/LICENSE.openssl
+
+      - name: Package artifacts for release
+        env:
+          DESTINATION: "release"
+        run: |
+          mkdir release
+
+          NAME="gdcurl" ./misc/scripts/package_release.sh
+
+          ls -R release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: godot-gdcurl
+          path: release/godot-gdcurl.zip

@@ -10,6 +10,11 @@ def validate_godotcpp_dir(key, val, env):
         raise UserError("GDExtension directory ('%s') does not exist: %s" % (key, val))
 
 
+if "ios_min_version" not in ARGUMENTS:
+    ARGUMENTS["ios_min_version"] = "11.0"
+if "macos_deployment_target" not in ARGUMENTS:
+    ARGUMENTS["macos_deployment_target"] = "11.0"
+
 env = Environment()
 opts = Variables(["customs.py"], ARGUMENTS)
 opts.Add(BoolVariable("compat", help="Enable pre-HTTPClientExtension compatibility mode", default=True))
