@@ -10,10 +10,21 @@
 		"OS",
 		"Engine",
 		"StreamPeerBuffer",
+		"CryptoKey",
 		"X509Certificate",
 		"TLSOptions",
 		"Thread",
 		"Timer",
-		"FileAccess"
+		"FileAccess",
+		"HTTPClient",
+		"HTTPRequest",
+		"SceneTree",
+		"Window",
+		"DisplayServer",
+		"StyleBox",
+		"Texture2D",
+		"CanvasItem",
+		"Mesh",
+		"Material"
 	]
 }

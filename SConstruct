@@ -27,6 +27,14 @@ opts.Add(
         validate_godotcpp_dir,
     )
 )
+opts.Add(
+    EnumVariable(
+        "tls_library",
+        "The TLS library to use ('openssl' or 'mbedTLS')",
+        "openssl",
+        ["openssl", "mbedtls"],
+    )
+)
 opts.Update(env)
 
 sconstruct = env.get("godot_cpp", "godot-cpp") + "/SConstruct"
@@ -47,10 +55,18 @@ if env["compat"]:
     env.Append(CPPDEFINES=["HTTP_CLIENT_EXTENSION_COMPAT"])
 
 # Add our build tools
-for tool in ["openssl", "cmake", "curl"]:
+for tool in ["openssl", "cmake", "mbedtls", "curl"]:
     env.Tool(tool, toolpath=["tools"])
 
-ssl = env.OpenSSL()
+use_openssl = env.get("tls_library", "") == "openssl"
+use_mbedtls = env.get("tls_library", "") == "mbedtls"
+if use_openssl:
+    ssl = env.OpenSSL()
+elif use_mbedtls:
+    ssl = env.BuildMbedTLS()
+else:
+    print("Invalid 'tls_library': " + env.get("tls_library", ""))
+    Exit(255)
 
 curl = env.BuildCURL(ssl)
 
