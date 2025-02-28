@@ -1,6 +1,3 @@
-import os
-
-
 def build_library(env, ssl):
     curl_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",
@@ -21,24 +18,30 @@ def build_library(env, ssl):
         "CURL_USE_LIBSSH2": 0,  # Why does curl even...
         "CURL_USE_LIBPSL": 0,  # Thanks IANA.
         "USE_LIBIDN2": 0,  # GPL
+        "USE_NGHTTP2": 0,
         "CMAKE_POSITION_INDEPENDENT_CODE": 1,
+        "CMAKE_DISABLE_FIND_PACKAGE_ZSTD": 1,
         "CMAKE_DISABLE_FIND_PACKAGE_ZLIB": 1,
-        "OPENSSL_USE_STATIC_LIBS": 1,
-        "OPENSSL_INCLUDE_DIR": env["SSL_INCLUDE"],
-        "OPENSSL_SSL_LIBRARY": env["SSL_LIBRARY"],
-        "OPENSSL_CRYPTO_LIBRARY": env["SSL_CRYPTO_LIBRARY"],
-        "OPENSSL_ROOT_DIR": env["SSL_INSTALL"],
+        "CURL_USE_MBEDTLS": 1,
+        "CURL_USE_PKGCONFIG": 0,
+        "CURL_BROTLI": 0,
+        "CURL_ZSTD": 0,
+        "CURL_ZLIB": 0,
+        "CURL_STATIC_CRT": 1 if env.get("use_static_cpp", False) else 0,
+        "MBEDTLS_LIBRARY": env["MBEDTLS_LIBRARY"],
+        "MBEDCRYPTO_LIBRARY": env["MBEDTLS_CRYPTO_LIBRARY"],
+        "MBEDX509_LIBRARY": env["MBEDTLS_X509_LIBRARY"],
+        "MBEDTLS_INCLUDE_DIR": env["MBEDTLS_INCLUDE"],
     }
     is_msvc = env.get("is_msvc", False)
     lib_ext = ".lib" if is_msvc else ".a"
-    lib_prefix = "" if is_msvc else "lib"
     curl_libs = [
-        "lib/{}curl{}".format(lib_prefix, lib_ext),
+        "lib/libcurl{}".format(lib_ext),
     ]
     # Build cURL
     curl = env.CMakeBuild(
-        "#bin/thirdparty/curl/",
-        "#thirdparty/curl",
+        env.Dir("#bin/thirdparty/curl/"),
+        env.Dir("#thirdparty/curl"),
         cmake_options=curl_config,
         cmake_outputs=curl_libs,
         cmake_targets=["libcurl_static"],
@@ -47,11 +50,12 @@ def build_library(env, ssl):
 
     # Configure env.
     if env["platform"] == "windows":
-        env.PrependUnique(LIBS=["ws2_32", "bcrypt"])
+        env.PrependUnique(LIBS=["ws2_32", "bcrypt", "advapi32"])
     if env["platform"] == "linux":
         env.PrependUnique(LIBS=["pthread"])
     env.Prepend(LIBS=list(filter(lambda f: str(f).endswith(lib_ext), curl)))
-    env.Append(CPPPATH=["#thirdparty/curl/include"])
+    env.Append(CPPPATH=[env.Dir("#thirdparty/curl/include")])
+    env.Append(CPPDEFINES=["CURL_STATICLIB"])  # For Windows MSVC
 
     return curl
 

@@ -234,7 +234,7 @@ jobs:
         run: |
           cp LICENSE artifacts/LICENSE.gdcurl
           cp thirdparty/curl/COPYING artifacts/LICENSE.curl
-          cp thirdparty/openssl/LICENSE.txt artifacts/LICENSE.openssl
+          cp thirdparty/mbedtls/LICENSE artifacts/LICENSE.mbedtls
 
       - name: Package artifacts for release
         env:
