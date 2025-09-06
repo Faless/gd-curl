@@ -42,7 +42,7 @@ namespace godot {
 
 CharString HTTPClient2Curl::system_cas;
 CharString HTTPClient2Curl::user_agent;
-bool HTTPClient2Curl::initialized = false;
+bool HTTPClient2Curl::enable_http3 = false;
 
 PackedStringArray HTTPRequest2Curl::get_headers() const {
 	return headers;
@@ -81,13 +81,10 @@ HTTPClient2 *HTTPClient2Curl::_create() {
 	return memnew(HTTPClient2Curl);
 }
 
-void HTTPClient2Curl::initialize() {
-	if (initialized) {
-		return;
-	}
-	initialized = true;
+void HTTPClient2Curl::initialize(bool p_enable_http3) {
 	system_cas = OS::get_singleton()->get_system_ca_certificates().utf8();
 	user_agent = ("User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + +" (" + OS::get_singleton()->get_name() + ") (cURL)").utf8();
+	enable_http3 = p_enable_http3;
 	HTTPClient2::_create = HTTPClient2Curl::_create;
 }
 
@@ -189,6 +186,9 @@ Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method
 	curl_easy_setopt(eh, CURLOPT_URL, p_url.utf8().get_data());
 	curl_easy_setopt(eh, CURLOPT_USERAGENT, user_agent.get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
+	if (enable_http3) {
+		curl_easy_setopt(eh, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_3);
+	}
 	curl_easy_setopt(eh, CURLOPT_ACCEPT_ENCODING, ""); // Enables built-in decompressions.
 	if (p_method == HTTPClient::METHOD_HEAD) {
 		curl_easy_setopt(eh, CURLOPT_NOBODY, 1L);

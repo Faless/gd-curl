@@ -30,7 +30,6 @@
 
 #include "godot_cpp/classes/ip.hpp"
 #include "godot_cpp/classes/os.hpp"
-#include "godot_cpp/classes/project_settings.hpp"
 #include "godot_cpp/variant/string.hpp"
 
 #include "http_client_curl.h"
@@ -56,10 +55,12 @@ char const *HTTPClientCurl::methods[10] = {
 
 CharString HTTPClientCurl::system_cas;
 CharString HTTPClientCurl::user_agent;
+bool HTTPClientCurl::enable_http3 = false;
 
-void HTTPClientCurl::initialize() {
+void HTTPClientCurl::initialize(bool p_enable_http3) {
 	system_cas = OS::get_singleton()->get_system_ca_certificates().utf8();
 	user_agent = ("User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + +" (" + OS::get_singleton()->get_name() + ") (cURL)").utf8();
+	enable_http3 = p_enable_http3;
 }
 
 void HTTPClientCurl::deinitialize() {
@@ -240,6 +241,9 @@ Error HTTPClientCurl::_request(HTTPClient::Method p_method, const String &p_url,
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_URL, url.utf8().get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
+	if (enable_http3) {
+		curl_easy_setopt(eh, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_3);
+	}
 	curl_easy_setopt(eh, CURLOPT_HTTP_TRANSFER_DECODING, 0L);
 	bool is_head = p_method == HTTPClient::Method::METHOD_HEAD;
 	if (is_head) {
