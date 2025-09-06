@@ -8,7 +8,7 @@ env:
 jobs:
   static-checks:
     name: 📊 Static Checks (clang-format, black format, file format)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,24 +49,24 @@ jobs:
           - platform: android
             arch: 'x86_64'
             sconsflags: 'ANDROID_HOME='
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             cache-name: android-x86_64
           - platform: android
             arch: 'arm64'
             sconsflags: 'ANDROID_HOME='
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             cache-name: android-arm64
 
           # iOS
           - platform: ios
             arch: 'x86_64'
             sconsflags: 'ios_simulator=true'
-            os: 'macos-12'
+            os: 'macos-latest'
             cache-name: ios-x86_64-simulator
           - platform: ios
             arch: 'arm64'
             sconsflags: ''
-            os: 'macos-12'
+            os: 'macos-latest'
             cache-name: ios-arm64
 
           # Linux
@@ -74,45 +74,45 @@ jobs:
             arch: 'x86_32'
             buildroot: 'i686-godot-linux-gnu_sdk-buildroot'
             sconsflags: ''
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             cache-name: linux-x86_32
           - platform: linux
             arch: 'x86_64'
             buildroot: 'x86_64-godot-linux-gnu_sdk-buildroot'
             sconsflags: ''
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             cache-name: linux-x86_64
           - platform: linux
             arch: 'arm32'
             buildroot: 'arm-godot-linux-gnueabihf_sdk-buildroot'
             sconsflags: ''
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             cache-name: linux-arm32
           - platform: linux
             arch: 'arm64'
             buildroot: 'aarch64-godot-linux-gnu_sdk-buildroot'
             sconsflags: ''
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             cache-name: linux-arm64
 
           # macOS
           - platform: macos
             arch: 'universal'
             sconsflags: ''
-            os: 'macos-12'
+            os: 'macos-latest'
             cache-name: macos-universal
 
           # Windows
           - platform: windows
             arch: 'x86_32'
             sconsflags: 'use_mingw=yes'
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             msvc_arch: amd64_x86
             cache-name: win-x86_32
           - platform: windows
             arch: 'x86_64'
             sconsflags: 'use_mingw=yes'
-            os: 'ubuntu-20.04'
+            os: 'ubuntu-24.04'
             msvc_arch: amd64
             cache-name: win-x86_64
 
@@ -184,16 +184,13 @@ jobs:
         if: ${{ matrix.platform == 'linux' }}
         run: |
           if [ ! -f ${{ matrix.buildroot }}.tar.bz2 ]; then
-            wget https://downloads.tuxfamily.org/godotengine/toolchains/linux/${{ matrix.buildroot }}.tar.bz2
+            wget https://github.com/godotengine/buildroot/releases/download/godot-2023.08.x-4/${{ matrix.buildroot }}.tar.bz2
           fi
           tar -xjf ${{ matrix.buildroot }}.tar.bz2
           ${{ matrix.buildroot }}/relocate-sdk.sh
+          rm ${{ matrix.buildroot }}/bin/cmake
           echo "$GITHUB_WORKSPACE/${{ matrix.buildroot }}/bin" >> $GITHUB_PATH
           echo "PKG_CONFIG=$GITHUB_WORKSPACE/${{ matrix.buildroot }}/share/pkgconfig/" >> $GITHUB_ENV
-
-      - name: Patch godot-cpp to support build profile.
-        run: |
-          patch -p1 < misc/patches/build_profile.diff
 
       - name: Print tools versions
         run: |
