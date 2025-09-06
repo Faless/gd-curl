@@ -1,4 +1,4 @@
-def build_library(env, ssl):
+def build_library(env, ssl, zlib):
     curl_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",
         "BUILD_CURL_EXE": 0,
@@ -22,7 +22,9 @@ def build_library(env, ssl):
         "CURL_USE_PKGCONFIG": 0,
         "CURL_BROTLI": 0,
         "CURL_ZSTD": 0,
-        "CURL_ZLIB": 0,
+        "CURL_ZLIB": 1,
+        "ZLIB_LIBRARY": env["ZLIB_LIBRARY"],
+        "ZLIB_INCLUDE_DIR": env["ZLIB_INCLUDE"],
         "CURL_STATIC_CRT": 1 if env.get("use_static_cpp", False) else 0,
     }
 
@@ -57,7 +59,7 @@ def build_library(env, ssl):
         cmake_options=curl_config,
         cmake_outputs=curl_libs,
         cmake_targets=["libcurl_static"],
-        dependencies=ssl,
+        dependencies=ssl + zlib,
     )
 
     # Configure env.

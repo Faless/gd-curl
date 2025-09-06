@@ -229,6 +229,7 @@ jobs:
           cp thirdparty/curl/COPYING artifacts/LICENSE.curl
           cp thirdparty/openssl/LICENSE.txt artifacts/LICENSE.openssl
           cp thirdparty/mbedtls/LICENSE artifacts/LICENSE.mbedtls
+          cp thirdparty/zlib/LICENSE artifacts/LICENSE.zlib
 
       - name: Package artifacts for release
         env:
