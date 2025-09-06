@@ -1,4 +1,4 @@
-def build_library(env, ssl, zlib):
+def build_library(env, ssl, zlib, nghttp2):
     curl_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",
         "BUILD_CURL_EXE": 0,
@@ -17,7 +17,6 @@ def build_library(env, ssl, zlib):
         "CURL_USE_LIBSSH2": 0,  # Why does curl even...
         "CURL_USE_LIBPSL": 0,  # Thanks IANA.
         "USE_LIBIDN2": 0,  # GPL
-        "USE_NGHTTP2": 0,
         "CMAKE_POSITION_INDEPENDENT_CODE": 1,
         "CURL_USE_PKGCONFIG": 0,
         "CURL_BROTLI": 0,
@@ -25,7 +24,11 @@ def build_library(env, ssl, zlib):
         "CURL_ZLIB": 1,
         "ZLIB_LIBRARY": env["ZLIB_LIBRARY"],
         "ZLIB_INCLUDE_DIR": env["ZLIB_INCLUDE"],
+        "USE_NGHTTP2": 1,
+        "NGHTTP2_LIBRARY": env["NGHTTP2_LIBRARY"],
+        "NGHTTP2_INCLUDE_DIR": env["NGHTTP2_INCLUDE"],
         "CURL_STATIC_CRT": 1 if env.get("use_static_cpp", False) else 0,
+        "CMAKE_C_FLAGS": "-DNGHTTP2_STATICLIB",
     }
 
     use_openssl = env.get("tls_library", "") == "openssl"
@@ -59,17 +62,17 @@ def build_library(env, ssl, zlib):
         cmake_options=curl_config,
         cmake_outputs=curl_libs,
         cmake_targets=["libcurl_static"],
-        dependencies=ssl + zlib,
+        dependencies=ssl + zlib + nghttp2,
     )
 
     # Configure env.
     if env["platform"] == "windows":
-        env.PrependUnique(LIBS=["ws2_32", "bcrypt", "advapi32"])
+        env.PrependUnique(LIBS=["ws2_32", "bcrypt", "advapi32", "iphlpapi"])
     if env["platform"] == "linux":
         env.PrependUnique(LIBS=["pthread"])
     env.Prepend(LIBS=list(filter(lambda f: str(f).endswith(lib_ext), curl)))
     env.Append(CPPPATH=[env.Dir("#thirdparty/curl/include")])
-    env.Append(CPPDEFINES=["CURL_STATICLIB"])  # For Windows MSVC
+    env.Append(CPPDEFINES=["CURL_STATICLIB", "NGHTTP2_STATICLIB"])  # For Windows
 
     return curl
 

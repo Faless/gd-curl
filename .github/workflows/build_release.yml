@@ -230,6 +230,7 @@ jobs:
           cp thirdparty/openssl/LICENSE.txt artifacts/LICENSE.openssl
           cp thirdparty/mbedtls/LICENSE artifacts/LICENSE.mbedtls
           cp thirdparty/zlib/LICENSE artifacts/LICENSE.zlib
+          cp thirdparty/nghttp2/LICENSE artifacts/LICENSE.nghttp2
 
       - name: Package artifacts for release
         env:
