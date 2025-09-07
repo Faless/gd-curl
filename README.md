@@ -31,8 +31,8 @@ Build release:
 scons platform=desired_platform target=template_release
 ```
 
-Build without the compatiblity mode (requires upstream patch, in
-`misc/patches/godot.diff`, and custom API extension.json).
+Build without the compatibility mode (requires upstream patch, in
+`misc/patches/godot.patch`, and custom API extension.json).
 
 ```
 scons custom_api_file=/path/to/extension.json platform=desired_platform target=desired_target compat=no
