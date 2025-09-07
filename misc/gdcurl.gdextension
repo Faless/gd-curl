@@ -1,7 +1,7 @@
 [configuration]
 
 entry_symbol = "gdcurl_extension_init"
-compatibility_minimum = {GODOT_VERSION}
+compatibility_minimum = "{GODOT_VERSION}"
 
 [libraries]
 

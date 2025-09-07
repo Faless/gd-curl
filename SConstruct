@@ -86,7 +86,7 @@ Default(library)
 extfile = env.Substfile(
     os.path.join(result_path, "gdcurl.gdextension"),
     "misc/gdcurl.gdextension",
-    SUBST_DICT={"{GODOT_VERSION}": "4.1"},
+    SUBST_DICT={"{GODOT_VERSION}": "4.3"},
 )
 
 Default(extfile)
