@@ -4,7 +4,7 @@ set -e
 set -x
 
 ARTIFACTS=${ARTIFACTS:-"artifacts"}
-DESTINATION=${DESTIONATION:-"release"}
+DESTINATION=${DESTINATION:-"release"}
 NAME=${NAME:-"gdcurl"}
 
 mkdir -p ${DESTINATION}

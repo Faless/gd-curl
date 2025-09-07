@@ -4,7 +4,7 @@ A Godot HTTPClient-compatible implementation using libcurl.
 
 This could be used as a replacement for the default Godot HTTPClient.
 
-It requires an upstream PR to be able to seemlessly replace the default
+It requires an upstream PR to be able to seamlessly replace the default
 implementation.
 
 When building with `compat=yes` (default), the extension will instead

@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef HTTP_REQUEST_COMPAT_H
-#define HTTP_REQUEST_COMPAT_H
+#pragma once
 
 #include "http_client_extension.hpp"
 
@@ -155,5 +154,3 @@ public:
 };
 
 } // namespace godot
-
-#endif // HTTP_REQUEST_COMPAT_H

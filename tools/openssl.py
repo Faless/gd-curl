@@ -1,9 +1,11 @@
-import os, sys
-import SCons.Util
-import SCons.Builder
+import os
+import sys
+
 import SCons.Action
+import SCons.Builder
+import SCons.Util
 from SCons.Defaults import Mkdir
-from SCons.Variables import PathVariable, BoolVariable
+from SCons.Variables import PathVariable
 
 
 def ssl_platform_target(env):
@@ -239,7 +241,10 @@ def generate(env):
 
     # Check if the user specified infos about external OpenSSL files.
     external_opts = ["openssl_external_crypto", "openssl_external_ssl", "openssl_external_include"]
-    is_set = lambda k: env.get(k, "") != ""
+
+    def is_set(k):
+        return env.get(k, "") != ""
+
     if any(map(is_set, external_opts)):
         # Need provide the whole (crypto, ssl, include) triple to proceed.
         if not all(map(is_set, external_opts)):

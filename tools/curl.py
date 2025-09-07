@@ -1,6 +1,3 @@
-import os
-
-
 def build_library(env, ssl):
     curl_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",

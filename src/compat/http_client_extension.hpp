@@ -28,6 +28,8 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#pragma once
+
 // THIS FILE IS GENERATED. EDITS WILL BE LOST.
 
 #ifndef GODOT_CPP_HTTP_CLIENT_EXTENSION_COMPAT_HPP

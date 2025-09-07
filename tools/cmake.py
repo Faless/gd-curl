@@ -1,8 +1,9 @@
-import os, sys
+import os
+import sys
 
-import SCons.Util
-import SCons.Builder
 import SCons.Action
+import SCons.Builder
+import SCons.Util
 
 
 def cmake_default_flags(env):

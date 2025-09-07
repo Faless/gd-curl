@@ -1,7 +1,8 @@
 #!python
 
-import os, sys, platform, json, subprocess
-import SCons
+from misc.utility.scons_hints import *
+
+import os
 
 
 def validate_godotcpp_dir(key, val, env):

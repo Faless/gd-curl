@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef HTTP_CLIENT_CURL_H
-#define HTTP_CLIENT_CURL_H
+#pragma once
 
 #ifdef HTTP_CLIENT_EXTENSION_COMPAT
 #include "compat/http_client_extension.hpp"
@@ -136,5 +135,3 @@ public:
 };
 
 }; // namespace godot
-
-#endif // #define HTTP_CLIENT_CURL_H

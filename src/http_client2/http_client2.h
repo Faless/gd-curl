@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef HTTP_CLIENT_2_H
-#define HTTP_CLIENT_2_H
+#pragma once
 
 #include "godot_cpp/classes/http_client.hpp"
 #include "godot_cpp/classes/ref_counted.hpp"
@@ -71,5 +70,3 @@ public:
 };
 
 }; //namespace godot
-
-#endif // HTTP_CLIENT_2_H

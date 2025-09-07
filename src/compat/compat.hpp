@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef GDCURL_COMPAT_H
-#define GDCURL_COMPAT_H
+#pragma once
 
 #include "godot_cpp/variant/string.hpp"
 
@@ -38,5 +37,3 @@ namespace godot {
 Error godot_parse_url(const String &p_base, String &r_scheme, String &r_host, int &r_port, String &r_path);
 
 }
-
-#endif // GDCURL_COMPAT_H

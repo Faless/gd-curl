@@ -28,8 +28,7 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
-#ifndef RING_BUFFER_H
-#define RING_BUFFER_H
+#pragma once
 
 #include "godot_cpp/templates/vector.hpp"
 
@@ -220,5 +219,3 @@ public:
 };
 
 }; //namespace godot
-
-#endif // RING_BUFFER_H
