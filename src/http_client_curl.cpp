@@ -263,6 +263,7 @@ Error HTTPClientCurl::_request(HTTPClient::Method p_method, const String &p_url,
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_URL, url.utf8().get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
+	curl_easy_setopt(eh, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1); // Until we fix the state machine
 	bool is_head = p_method == HTTPClient::Method::METHOD_HEAD;
 	if (is_head) {
 		curl_easy_setopt(eh, CURLOPT_NOBODY, 1L);

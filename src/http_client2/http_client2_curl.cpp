@@ -203,6 +203,7 @@ Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_URL, p_url.utf8().get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
+	curl_easy_setopt(eh, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1); // Until we fix the state machine
 	if (p_method == HTTPClient::Method::METHOD_HEAD) {
 		curl_easy_setopt(eh, CURLOPT_NOBODY, 1L);
 	}
