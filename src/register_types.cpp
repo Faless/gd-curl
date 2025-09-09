@@ -72,6 +72,7 @@ void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
 	GDREGISTER_ABSTRACT_CLASS(HTTPClient2);
 	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2);
 
+	HTTPClient2Curl::initialize();
 	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2Curl); // TODO Not needed?
 	GDREGISTER_CLASS(HTTPClient2Curl);
 
@@ -91,6 +92,8 @@ void unregister_gdcurl_extension_types(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+	HTTPClient2Curl::deinitialize();
+	HTTPClientCurl::deinitialize();
 	if (curl_ok) {
 		curl_global_cleanup();
 	}

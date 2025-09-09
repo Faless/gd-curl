@@ -106,6 +106,7 @@ private:
 
 public:
 	static void initialize();
+	static void deinitialize();
 
 	virtual Error _request(HTTPClient::Method p_method, const String &p_url, const PackedStringArray &p_headers, const uint8_t *p_body, int32_t p_body_size) override;
 	virtual Error _connect_to_host(const String &p_host, int32_t p_port, const Ref<TLSOptions> &p_options) override;
