@@ -41,6 +41,7 @@
 namespace godot {
 
 CharString HTTPClient2Curl::system_cas = "";
+CharString HTTPClient2Curl::user_agent = "";
 bool HTTPClient2Curl::initialized = false;
 
 PackedStringArray HTTPRequest2Curl::get_headers() const {
@@ -86,11 +87,13 @@ void HTTPClient2Curl::initialize() {
 	}
 	initialized = true;
 	system_cas = OS::get_singleton()->get_system_ca_certificates().utf8();
+	user_agent = ("User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + +" (" + OS::get_singleton()->get_name() + ") (cURL)").utf8();
 	HTTPClient2::_create = HTTPClient2Curl::_create;
 }
 
 void HTTPClient2Curl::deinitialize() {
 	system_cas = CharString();
+	user_agent = CharString();
 }
 
 size_t HTTPClient2Curl::_read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
@@ -165,16 +168,6 @@ bool HTTPClient2Curl::_init_request_headers(CURL *p_handle, const PackedStringAr
 		String h = p_headers[i];
 		curl_headers = curl_slist_append(curl_headers, h.utf8().get_data());
 		h = h.to_lower();
-
-		if (add_uagent && h.find("user-agent:") == 0) {
-			add_uagent = false;
-		}
-	}
-
-	// Add default headers.
-	if (add_uagent) {
-		const String uagent = "User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + +" (" + OS::get_singleton()->get_name() + ") (cURL)";
-		curl_headers = curl_slist_append(curl_headers, uagent.utf8().get_data());
 	}
 
 	if (curl_headers) {
@@ -194,6 +187,7 @@ Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method
 	ERR_FAIL_COND_V_MSG(p_method < 0 || p_method > 9, Ref<HTTPRequest2>(), "Invalid method.");
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_URL, p_url.utf8().get_data());
+	curl_easy_setopt(eh, CURLOPT_USERAGENT, user_agent.get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
 	curl_easy_setopt(eh, CURLOPT_ACCEPT_ENCODING, ""); // Enables built-in decompressions.
 	if (p_method == HTTPClient::METHOD_HEAD) {

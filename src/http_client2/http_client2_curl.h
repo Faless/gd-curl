@@ -93,6 +93,7 @@ private:
 	static const char *methods[HTTPClient::METHOD_MAX + 1];
 	static bool initialized;
 	static CharString system_cas;
+	static CharString user_agent;
 
 	static size_t _read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata);
 	static size_t _header_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata);
