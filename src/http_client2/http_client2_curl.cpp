@@ -127,7 +127,7 @@ size_t HTTPClient2Curl::_header_callback(char *p_buffer, size_t p_size, size_t p
 
 	if (size == 2) {
 		int rc = 0;
-		if (req->headers.size() && req->headers[0].to_lower().begins_with("http ")) {
+		if (req->headers.size() && req->headers[0].to_lower().begins_with("http")) {
 			rc = req->headers[0].split(" ")[1].to_int();
 		}
 		if (rc == 100) {
