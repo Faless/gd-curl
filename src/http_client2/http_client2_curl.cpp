@@ -30,32 +30,40 @@
 
 #include "http_client2_curl.h"
 
-#include "godot_cpp/classes/os.hpp"
+#include <godot_cpp/classes/os.hpp>
+#include <godot_cpp/core/version.hpp>
 #include <godot_cpp/templates/list.hpp>
 
-#define VERSION_BRANCH _MKSTR(VERSION_MAJOR) "." _MKSTR(VERSION_MINOR)
-#define VERSION_NUMBER VERSION_BRANCH "." _MKSTR(VERSION_PATCH)
+#define VERSION_BRANCH _MKSTR(GODOT_VERSION_MAJOR) "." _MKSTR(GODOT_VERSION_MINOR)
+#define VERSION_NUMBER VERSION_BRANCH "." _MKSTR(GODOT_VERSION_PATCH)
 #define VERSION_FULL_BUILD VERSION_NUMBER
 
 namespace godot {
+
+CharString HTTPClient2Curl::system_cas = "";
+bool HTTPClient2Curl::initialized = false;
 
 PackedStringArray HTTPRequest2Curl::get_headers() const {
 	return headers;
 }
 
 bool HTTPRequest2Curl::has_headers() const {
-	return headers.size();
+	return headers_over && headers.size();
 }
 
 bool HTTPRequest2Curl::has_response() const {
-	return status == STATUS_COMPLETE && response->get_size() > 0;
+	return complete && response->get_size() > 0;
 }
 
 PackedByteArray HTTPRequest2Curl::get_response() const {
 	return response->get_data_array();
 }
 
-char const *HTTPClient2Curl::methods[10] = {
+int HTTPRequest2Curl::get_response_code() const {
+	return response_code;
+}
+
+char const *HTTPClient2Curl::methods[HTTPClient::METHOD_MAX + 1] = {
 	"GET",
 	"HEAD",
 	"POST",
@@ -68,13 +76,21 @@ char const *HTTPClient2Curl::methods[10] = {
 	"MAX",
 };
 
-CharString HTTPClient2Curl::system_cas;
+HTTPClient2 *HTTPClient2Curl::_create() {
+	return memnew(HTTPClient2Curl);
+}
 
 void HTTPClient2Curl::initialize() {
-	// FIXME upstream
-#if 0
+	if (initialized) {
+		return;
+	}
+	initialized = true;
 	system_cas = OS::get_singleton()->get_system_ca_certificates().utf8();
-#endif
+	HTTPClient2::_create = HTTPClient2Curl::_create;
+}
+
+void HTTPClient2Curl::deinitialize() {
+	system_cas = CharString();
 }
 
 size_t HTTPClient2Curl::_read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
@@ -87,42 +103,41 @@ size_t HTTPClient2Curl::_read_callback(char *p_buffer, size_t p_size, size_t p_n
 	HTTPRequest2Curl *req = nullptr;
 	curl_easy_getinfo(eh, CURLINFO_PRIVATE, &req);
 
-	// From new to requesting.
-	if (req->status == HTTPRequest2Curl::STATUS_NEW) {
-		req->status = HTTPRequest2Curl::STATUS_REQUESTING;
-	}
-	ERR_FAIL_COND_V(req->status != HTTPRequest2Curl::STATUS_REQUESTING, 0);
+	ERR_FAIL_COND_V(req->headers_over, 0); // Likely a bug.
 
 	Array arr = req->request->get_partial_data(size);
 	PackedByteArray pba = arr[1].operator PackedByteArray();
 	if (pba.size()) {
-		memcpy(p_buffer, pba.ptr(), pba.size());
+		memcpy(p_buffer, pba.ptrw(), pba.size());
 	}
 
 	return curl_off_t(pba.size());
 }
 
 size_t HTTPClient2Curl::_header_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
+	// https://curl.se/libcurl/c/CURLOPT_HEADERFUNCTION.html
 	size_t size = p_size * p_nitems;
-	if (size == 0) {
-		return 0;
-	}
 
 	CURL *eh = (CURL *)p_userdata;
 	HTTPRequest2Curl *req = nullptr;
 	curl_easy_getinfo(eh, CURLINFO_PRIVATE, &req);
 
-	// From requesting to headers.
-	if (req->status == HTTPRequest2Curl::STATUS_REQUESTING) {
-		req->status = HTTPRequest2Curl::STATUS_HEADERS;
+	if (size == 2) {
+		int rc = 0;
+		if (req->headers.size() && req->headers[0].to_lower().begins_with("http ")) {
+			rc = req->headers[0].split(" ")[1].to_int();
+		}
+		if (rc == 100) {
+			req->headers.clear(); // A new request will follow.
+		} else {
+			req->response_code = rc;
+			req->headers_over = true;
+		}
+	} else {
+		req->headers.push_back(String::utf8(p_buffer, size - 2)); // Strip "\r\n"
 	}
-	ERR_FAIL_COND_V(req->status != HTTPRequest2Curl::STATUS_HEADERS, 0);
 
-	PackedByteArray pba;
-	pba.resize(size);
-	memcpy(pba.ptrw(), p_buffer, size);
-	req->response->put_data(pba);
-	return curl_off_t(pba.size());
+	return curl_off_t(size);
 }
 
 size_t HTTPClient2Curl::_write_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
@@ -135,15 +150,6 @@ size_t HTTPClient2Curl::_write_callback(char *p_buffer, size_t p_size, size_t p_
 	HTTPRequest2Curl *req = nullptr;
 	curl_easy_getinfo(eh, CURLINFO_PRIVATE, &req);
 
-	// From headers to body.
-	if (req->status == HTTPRequest2Curl::STATUS_HEADERS) {
-		req->status = HTTPRequest2Curl::STATUS_BODY;
-		req->headers = req->response->get_data_array().get_string_from_utf8().split("\r\n");
-		req->response->clear();
-		req->status = HTTPRequest2Curl::STATUS_BODY;
-	}
-	ERR_FAIL_COND_V(req->status != HTTPRequest2Curl::STATUS_BODY, 0);
-
 	PackedByteArray pba;
 	pba.resize(size);
 	memcpy(pba.ptrw(), p_buffer, size);
@@ -151,63 +157,48 @@ size_t HTTPClient2Curl::_write_callback(char *p_buffer, size_t p_size, size_t p_
 	return curl_off_t(pba.size());
 }
 
-Error HTTPClient2Curl::_init_request_headers(CURL *p_handle, const PackedStringArray &p_headers, int p_clen) {
-	bool add_clen = p_clen > 0;
+bool HTTPClient2Curl::_init_request_headers(CURL *p_handle, const PackedStringArray &p_headers) {
 	bool add_uagent = true;
-	bool add_accept = true;
+
 	curl_slist *curl_headers = nullptr;
 	for (int i = 0; i < p_headers.size(); i++) {
-		curl_headers = curl_slist_append(curl_headers, p_headers[i].ascii().get_data());
-		String h = p_headers[i].to_lower();
+		String h = p_headers[i];
+		curl_headers = curl_slist_append(curl_headers, h.utf8().get_data());
+		h = h.to_lower();
 
-		if (add_clen && h.findn("content-length:") == 0) {
-			add_clen = false;
-		}
-		if (add_uagent && h.findn("user-agent:") == 0) {
+		if (add_uagent && h.find("user-agent:") == 0) {
 			add_uagent = false;
-		}
-		if (add_accept && h.findn("accept:") == 0) {
-			add_accept = false;
 		}
 	}
 
 	// Add default headers.
-	if (add_clen) {
-		curl_headers = curl_slist_append(curl_headers, ("Content-Length: " + itos(p_clen)).ascii().get_data());
-	}
-
 	if (add_uagent) {
-		const String uagent = "User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + " (" + OS::get_singleton()->get_name() + ")";
-		curl_headers = curl_slist_append(curl_headers, uagent.ascii().get_data());
-	}
-
-	if (add_accept) {
-		curl_headers = curl_slist_append(curl_headers, String("Accept: */*").ascii().get_data());
+		const String uagent = "User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + +" (" + OS::get_singleton()->get_name() + ") (cURL)";
+		curl_headers = curl_slist_append(curl_headers, uagent.utf8().get_data());
 	}
 
 	if (curl_headers) {
 		CURLcode return_code = curl_easy_setopt(p_handle, CURLOPT_HTTPHEADER, curl_headers);
 		if (return_code != CURLE_OK) {
 			curl_slist_free_all(curl_headers);
-			ERR_PRINT("failed to set request headers: " + String::num_uint64(return_code));
-			return FAILED;
+			ERR_PRINT("failed to set request headers: " + itos(return_code));
+			return true;
 		}
 	}
-	return OK;
+	return false;
 }
 
-Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_request) {
-	int request_body_size = p_request.size();
-	ERR_FAIL_COND_V_MSG(request_body_size && p_method != HTTPClient::METHOD_POST && p_method != HTTPClient::METHOD_PUT, Ref<HTTPRequest2>(), "Selected method does not support request body");
+Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_body) {
+	int request_body_size = p_body.size();
+	ERR_FAIL_COND_V_MSG(request_body_size && p_method != HTTPClient::METHOD_POST && p_method != HTTPClient::METHOD_PUT && p_method != HTTPClient::METHOD_PATCH, Ref<HTTPRequest2>(), "Selected method does not support request body");
 	ERR_FAIL_COND_V_MSG(p_method < 0 || p_method > 9, Ref<HTTPRequest2>(), "Invalid method.");
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_URL, p_url.utf8().get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
-	curl_easy_setopt(eh, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1); // Until we fix the state machine
-	if (p_method == HTTPClient::Method::METHOD_HEAD) {
+	curl_easy_setopt(eh, CURLOPT_ACCEPT_ENCODING, ""); // Enables built-in decompressions.
+	if (p_method == HTTPClient::METHOD_HEAD) {
 		curl_easy_setopt(eh, CURLOPT_NOBODY, 1L);
 	}
-	// curl_easy_setopt(eh, CURLOPT_BUFFERSIZE, read_chunk_size); // TODO As needed
 
 	bool ssl = p_url.begins_with("https://");
 
@@ -215,46 +206,37 @@ Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method
 		curl_easy_setopt(eh, CURLOPT_USE_SSL, CURLUSESSL_ALL);
 	}
 
-	if (tls_options.is_valid()) {
-		// FIXME Upstream
-		bool insecure = false;
-		bool skip_host_verify = false;
-		Ref<X509Certificate> ca_cert;
-		if (insecure) {
-			curl_easy_setopt(eh, CURLOPT_SSL_VERIFYPEER, 0L);
-		}
-		if (skip_host_verify) {
-			curl_easy_setopt(eh, CURLOPT_SSL_VERIFYHOST, 0L);
-		}
-		if (ca_cert.is_valid()) {
-			CharString ca_cert_cs = ca_cert->save_to_string().utf8();
-			curl_blob ca_blob;
-			ca_blob.data = (uint8_t *)ca_cert_cs.get_data();
-			ca_blob.len = ca_cert_cs.size();
-			ca_blob.flags = CURL_BLOB_COPY;
-			curl_easy_setopt(eh, CURLOPT_CAINFO_BLOB, &ca_blob);
-		}
+	if (tls_options.is_valid() && tls_options->get_trusted_ca_chain().is_valid()) {
+		// Custom CAs for request
+		String ca_cert = tls_options->get_trusted_ca_chain()->save_to_string();
+		curl_blob ca_blob;
+		const CharString cs = ca_cert.utf8();
+		ca_blob.data = (void *)cs.get_data();
+		ca_blob.len = cs.size();
+		ca_blob.flags = CURL_BLOB_COPY;
+		curl_easy_setopt(eh, CURLOPT_CAINFO_BLOB, &ca_blob);
+
 	} else if (system_cas.size() > 0) {
 		// Default static CAs
 		curl_blob ca_blob;
-		ca_blob.data = (uint8_t *)system_cas.get_data();
+		ca_blob.data = (void *)system_cas.get_data();
 		ca_blob.len = system_cas.size();
 		ca_blob.flags = CURL_BLOB_NOCOPY;
 		curl_easy_setopt(eh, CURLOPT_CAINFO_BLOB, &ca_blob);
 	}
 
-	Error err = _init_request_headers(eh, p_headers, request_body_size);
-	if (err != OK) {
+	bool err = _init_request_headers(eh, p_headers);
+	if (err) {
 		curl_easy_cleanup(eh);
-		ERR_FAIL_V(Ref<HTTPRequest2>());
+		ERR_FAIL_V_MSG(nullptr, "Failed to set request headers.");
 	}
 
 	Ref<HTTPRequest2Curl> req;
 	req.instantiate();
+	req->request_id = last_request_id++;
 	req->handle = eh;
-	req->status = HTTPRequest2Curl::STATUS_REQUESTING; // TODO
 	req->response.instantiate();
-	requests[req->get_instance_id()] = req;
+	requests[req->get_request_id()] = req;
 
 	// Initialize callbacks.
 	curl_easy_setopt(eh, CURLOPT_PRIVATE, req.ptr());
@@ -262,12 +244,19 @@ Ref<HTTPRequest2> HTTPClient2Curl::fetch(const String &p_url, HTTPClient::Method
 	curl_easy_setopt(eh, CURLOPT_HEADERDATA, eh);
 	curl_easy_setopt(eh, CURLOPT_WRITEFUNCTION, _write_callback);
 	curl_easy_setopt(eh, CURLOPT_WRITEDATA, eh);
+#ifdef DEV_ENABLED
+	curl_easy_setopt(eh, CURLOPT_VERBOSE, 1);
+#endif
 	if (request_body_size) {
 		req->request.instantiate();
-		req->request->set_data_array(p_request);
+		req->request->set_data_array(p_body);
 		// Set request read callback.
 		curl_easy_setopt(eh, CURLOPT_READFUNCTION, _read_callback);
 		curl_easy_setopt(eh, CURLOPT_READDATA, eh);
+		// Tell curl we want to "POST" so it calls the read function.
+		// The real HTTP verb is set via CURLOPT_CUSTOMREQUEST above.
+		curl_easy_setopt(eh, CURLOPT_POST, 1);
+		curl_easy_setopt(eh, CURLOPT_POSTFIELDSIZE, request_body_size);
 	}
 
 	curl_multi_add_handle(curl, eh);
@@ -282,8 +271,7 @@ void HTTPClient2Curl::cancel(uint64_t p_request_id) {
 	Ref<HTTPRequest2Curl> req = requests[p_request_id];
 	curl_multi_remove_handle(curl, req->handle);
 	curl_easy_cleanup(req->handle);
-	req->status = HTTPRequest2Curl::STATUS_COMPLETE;
-	req->emit_signal("completed");
+	req->completed();
 	requests.erase(p_request_id);
 }
 
@@ -309,7 +297,6 @@ void HTTPClient2Curl::poll() {
 			/* m->data.result holds the error code for the transfer */
 			HTTPRequest2Curl *req = nullptr;
 			curl_easy_getinfo(eh, CURLINFO_PRIVATE, &req);
-			req->status = HTTPRequest2Curl::STATUS_COMPLETE;
 			req->success = true;
 			completed.push_back(req);
 			curl_multi_remove_handle(curl, eh);
@@ -318,9 +305,17 @@ void HTTPClient2Curl::poll() {
 	} while (m);
 
 	for (HTTPRequest2Curl *req : completed) {
-		req->emit_signal("completed");
-		requests.erase(req->get_instance_id());
+		req->completed();
+		requests.erase(req->get_request_id());
 	}
+}
+
+void HTTPRequest2Curl::completed() {
+	if (complete) {
+		return;
+	}
+	complete = true;
+	emit_signal("completed");
 }
 
 HTTPClient2Curl::HTTPClient2Curl() {
@@ -332,11 +327,10 @@ HTTPClient2Curl::~HTTPClient2Curl() {
 		curl_multi_cleanup(curl);
 	}
 	for (KeyValue<uint64_t, Ref<HTTPRequest2Curl>> &E : requests) {
-		E.value->status = HTTPRequest2Curl::STATUS_COMPLETE;
-		E.value->emit_signal("completed");
+		E.value->completed();
 		curl_easy_cleanup(E.value->handle);
 	}
 	requests.clear();
 }
 
-}; //namespace godot
+} //namespace godot

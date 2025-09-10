@@ -32,14 +32,10 @@
 
 #include "http_client2.h"
 
-#include <godot_cpp/templates/hash_map.hpp>
-#include <godot_cpp/templates/vector.hpp>
-#include <godot_cpp/variant/string.hpp>
-
 #include <godot_cpp/classes/stream_peer_buffer.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
 
 #include <curl/curl.h>
-#include <stdio.h>
 
 namespace godot {
 
@@ -49,30 +45,36 @@ class HTTPRequest2Curl : public HTTPRequest2 {
 private:
 	friend class HTTPClient2Curl;
 
-	enum Status {
-		STATUS_NEW,
-		STATUS_REQUESTING,
-		STATUS_HEADERS,
-		STATUS_BODY,
-		STATUS_COMPLETE,
-	};
-
 	CURL *handle = nullptr;
 
-	Status status = STATUS_NEW;
+	uint64_t request_id = 0;
 	PackedStringArray headers;
 	Ref<StreamPeerBuffer> response;
+	int response_code = 0;
 	Ref<StreamPeerBuffer> request;
+	bool headers_over = false;
+	bool complete = false;
 	bool success = false;
 
 protected:
 	static void _bind_methods() {}
+
+	String _to_string() const {
+		return "<HTTPRequest2Curl#" + itos(get_instance_id()) + ">";
+	}
 
 public:
 	virtual PackedStringArray get_headers() const override;
 	virtual bool has_headers() const override;
 	virtual bool has_response() const override;
 	virtual PackedByteArray get_response() const override;
+	virtual int get_response_code() const override;
+
+	void completed();
+	uint64_t get_request_id() {
+		return request_id;
+	}
+
 	~HTTPRequest2Curl() {}
 	HTTPRequest2Curl() {}
 };
@@ -80,8 +82,16 @@ public:
 class HTTPClient2Curl : public HTTPClient2 {
 	GDCLASS(HTTPClient2Curl, HTTPClient2);
 
+protected:
+	static void _bind_methods() {}
+
+	String _to_string() const {
+		return "<HTTPClient2Curl#" + itos(get_instance_id()) + ">";
+	}
+
 private:
-	static const char *methods[10];
+	static const char *methods[HTTPClient::METHOD_MAX + 1];
+	static bool initialized;
 	static CharString system_cas;
 
 	static size_t _read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata);
@@ -90,16 +100,17 @@ private:
 
 	CURLM *curl = nullptr;
 	HashMap<uint64_t, Ref<HTTPRequest2Curl>> requests;
+	uint64_t last_request_id = 1;
 
-	Error _init_request_headers(CURL *p_handle, const PackedStringArray &p_headers, int p_clen);
+	bool _init_request_headers(CURL *p_handle, const PackedStringArray &p_headers);
 
-protected:
-	static void _bind_methods() {}
+	static HTTPClient2 *_create();
 
 public:
 	static void initialize();
+	static void deinitialize();
 
-	virtual Ref<HTTPRequest2> fetch(const String &p_url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_request) override;
+	virtual Ref<HTTPRequest2> fetch(const String &p_url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_body) override;
 
 	virtual void cancel(uint64_t p_request_id) override;
 	virtual void poll() override;
@@ -107,4 +118,4 @@ public:
 	HTTPClient2Curl();
 };
 
-}; //namespace godot
+}; // namespace godot

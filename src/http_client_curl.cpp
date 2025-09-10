@@ -62,6 +62,10 @@ void HTTPClientCurl::initialize() {
 #endif
 }
 
+void HTTPClientCurl::deinitialize() {
+	system_cas = CharString();
+}
+
 size_t HTTPClientCurl::_read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
 	size_t size = p_size * p_nitems;
 	if (size == 0) {

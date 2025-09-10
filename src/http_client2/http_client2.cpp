@@ -30,9 +30,7 @@
 
 #include "http_client2.h"
 
-#include <godot_cpp/core/class_db.hpp>
-
-using namespace godot;
+namespace godot {
 
 void HTTPRequest2::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_headers"), &HTTPRequest2::get_headers);
@@ -42,11 +40,23 @@ void HTTPRequest2::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("completed"));
 }
 
+HTTPClient2 *(*HTTPClient2::_create)() = nullptr;
+
+Ref<HTTPClient2> HTTPClient2::create() {
+	if (_create) {
+		return Ref<HTTPClient2>(_create());
+	}
+	return nullptr;
+}
+
 void HTTPClient2::_bind_methods() {
+	ClassDB::bind_static_method("HTTPClient2", D_METHOD("create"), &HTTPClient2::create);
 	ClassDB::bind_method(D_METHOD("fetch", "url", "method", "headers", "request_data"), &HTTPClient2::fetch, DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedStringArray()), DEFVAL(PackedByteArray()));
-	ClassDB::bind_method(D_METHOD("cancel"), &HTTPClient2::cancel);
+	ClassDB::bind_method(D_METHOD("cancel", "id"), &HTTPClient2::cancel);
 	ClassDB::bind_method(D_METHOD("poll"), &HTTPClient2::poll);
 	ClassDB::bind_method(D_METHOD("set_tls_options", "tls_options"), &HTTPClient2::set_tls_options);
 	ClassDB::bind_method(D_METHOD("get_tls_options"), &HTTPClient2::get_tls_options);
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "tls_options", PROPERTY_HINT_RESOURCE_TYPE, "TLSOptions"), "set_tls_options", "get_tls_options");
 }
+
+}; //namespace godot

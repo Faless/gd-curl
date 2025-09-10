@@ -30,8 +30,8 @@
 
 #pragma once
 
-#include "godot_cpp/classes/http_client.hpp"
-#include "godot_cpp/classes/ref_counted.hpp"
+#include <godot_cpp/classes/http_client.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
 
 namespace godot {
 
@@ -42,31 +42,35 @@ protected:
 	static void _bind_methods();
 
 public:
-	virtual PackedStringArray get_headers() const { return PackedStringArray(); }
-	virtual PackedByteArray get_response() const { return PackedByteArray(); }
-	virtual bool has_headers() const { return false; }
-	virtual bool has_response() const { return false; }
+	virtual PackedStringArray get_headers() const = 0;
+	virtual PackedByteArray get_response() const = 0;
+	virtual bool has_headers() const = 0;
+	virtual bool has_response() const = 0;
+	virtual int get_response_code() const = 0;
 	virtual ~HTTPRequest2() {}
-	HTTPRequest2() {}
 };
 
 class HTTPClient2 : public RefCounted {
 	GDCLASS(HTTPClient2, RefCounted);
 
 protected:
-	static void _bind_methods();
+	static HTTPClient2 *(*_create)();
 
 	Ref<TLSOptions> tls_options;
 
+	static void _bind_methods();
+
 public:
-	virtual Ref<HTTPRequest2> fetch(const String &url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_request) { return Ref<HTTPRequest2>(); }
+	static Ref<HTTPClient2> create();
 
 	virtual Ref<TLSOptions> get_tls_options() const { return tls_options; }
 	virtual void set_tls_options(Ref<TLSOptions> p_tls) { tls_options = p_tls; }
-	virtual void cancel(uint64_t p_request_id) {}
-	virtual void poll() {}
+
+	virtual Ref<HTTPRequest2> fetch(const String &p_url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_body) = 0;
+
+	virtual void cancel(uint64_t p_request_id) = 0;
+	virtual void poll() = 0;
 	virtual ~HTTPClient2() {}
-	HTTPClient2() {}
 };
 
-}; //namespace godot
+}; // namespace godot
