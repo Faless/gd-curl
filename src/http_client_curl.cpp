@@ -55,15 +55,16 @@ char const *HTTPClientCurl::methods[10] = {
 };
 
 CharString HTTPClientCurl::system_cas;
+CharString HTTPClientCurl::user_agent;
 
 void HTTPClientCurl::initialize() {
-#ifndef HTTP_CLIENT_EXTENSION_COMPAT
 	system_cas = OS::get_singleton()->get_system_ca_certificates().utf8();
-#endif
+	user_agent = ("User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + +" (" + OS::get_singleton()->get_name() + ") (cURL)").utf8();
 }
 
 void HTTPClientCurl::deinitialize() {
 	system_cas = CharString();
+	user_agent = CharString();
 }
 
 size_t HTTPClientCurl::_read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
@@ -92,26 +93,40 @@ size_t HTTPClientCurl::_read_callback(char *p_buffer, size_t p_size, size_t p_ni
 }
 
 size_t HTTPClientCurl::_header_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
+	// https://curl.se/libcurl/c/CURLOPT_HEADERFUNCTION.html
 	size_t size = p_size * p_nitems;
-	if (size == 0) {
-		return 0;
-	}
 
 	CURL *eh = (CURL *)p_userdata;
 	CURLRequest *req = nullptr;
 	curl_easy_getinfo(eh, CURLINFO_PRIVATE, &req);
 
-	// From requesting to headers.
-	if (req->status == CURLRequest::STATUS_REQUESTING) {
-		req->status = CURLRequest::STATUS_HEADERS;
+	if (size == 2) {
+		int rc = 0;
+		if (req->headers.size() && req->headers[0].to_lower().begins_with("http")) {
+			rc = req->headers[0].split(" ")[1].to_int();
+		}
+		if (rc == 100) {
+			req->headers.clear(); // A new request will follow.
+		} else {
+			req->response_code = rc;
+			for (int i = 0; i < req->headers.size(); i++) {
+				const String h = req->headers[i].to_lower();
+				if (h.begins_with("content-length:") && !req->head) {
+					req->body_size = h.substr(h.find(":") + 1, h.length()).strip_edges().to_int();
+				} else if (h.begins_with("transfer-encoding:")) {
+					const String encoding = h.substr(h.find(":") + 1, h.length()).strip_edges();
+					if (encoding == "chunked") {
+						req->chunked = true;
+					}
+				}
+			}
+			req->status = CURLRequest::STATUS_BODY;
+		}
+	} else {
+		req->headers.push_back(String::utf8(p_buffer, size - 2)); // Strip "\r\n"
 	}
-	ERR_FAIL_COND_V(req->status != CURLRequest::STATUS_HEADERS, 0);
 
-	PackedByteArray pba;
-	pba.resize(size);
-	memcpy(pba.ptrw(), p_buffer, size);
-	req->response->put_data(pba);
-	return curl_off_t(pba.size());
+	return curl_off_t(size);
 }
 
 size_t HTTPClientCurl::_write_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata) {
@@ -126,65 +141,23 @@ size_t HTTPClientCurl::_write_callback(char *p_buffer, size_t p_size, size_t p_n
 
 	// From headers to body.
 	if (req->status == CURLRequest::STATUS_HEADERS) {
-		req->status = CURLRequest::STATUS_BODY;
-		_parse_response_headers(req);
+		// We need to queue this.
+		PackedByteArray pba;
+		pba.resize(size);
+		memcpy(pba.ptrw(), p_buffer, size);
+		req->response->put_data(pba);
+		return curl_off_t(size);
 	}
 	ERR_FAIL_COND_V(req->status != CURLRequest::STATUS_BODY, 0);
 
 	return curl_off_t(req->rb.write((const uint8_t *)p_buffer, size));
 }
 
-void HTTPClientCurl::_parse_response_headers(CURLRequest *p_request) {
-	p_request->headers = p_request->response->get_data_array().get_string_from_utf8().split("\r\n");
-	p_request->response->clear();
-	for (int i = 0; i < p_request->headers.size(); i++) {
-		const String h = p_request->headers[i].to_lower();
-		if (i == 0 && h.begins_with("http")) {
-			String num = h.get_slicec(' ', 1);
-			p_request->response_code = num.to_int();
-		} else if (h.begins_with("content-length:") && !p_request->head) {
-			p_request->body_size = h.substr(h.find(":") + 1, h.length()).strip_edges().to_int();
-		} else if (h.begins_with("transfer-encoding:")) {
-			String encoding = h.substr(h.find(":") + 1, h.length()).strip_edges();
-			if (encoding == "chunked") {
-				p_request->chunked = true;
-			}
-		}
-	}
-}
-
 Error HTTPClientCurl::_init_request_headers(CURL *p_handle, const PackedStringArray &p_headers, int p_clen) {
 	bool add_clen = p_clen > 0;
-	bool add_uagent = true;
-	bool add_accept = true;
 	curl_slist *curl_headers = nullptr;
 	for (int i = 0; i < p_headers.size(); i++) {
 		curl_headers = curl_slist_append(curl_headers, p_headers[i].ascii().get_data());
-		String h = p_headers[i].to_lower();
-
-		if (add_clen && h.findn("content-length:") == 0) {
-			add_clen = false;
-		}
-		if (add_uagent && h.findn("user-agent:") == 0) {
-			add_uagent = false;
-		}
-		if (add_accept && h.findn("accept:") == 0) {
-			add_accept = false;
-		}
-	}
-
-	// Add default headers.
-	if (add_clen) {
-		curl_headers = curl_slist_append(curl_headers, ("Content-Length: " + itos(p_clen)).ascii().get_data());
-	}
-
-	if (add_uagent) {
-		const String uagent = "User-Agent: GodotEngine/" + String(VERSION_FULL_BUILD) + " (" + OS::get_singleton()->get_name() + ")";
-		curl_headers = curl_slist_append(curl_headers, uagent.ascii().get_data());
-	}
-
-	if (add_accept) {
-		curl_headers = curl_slist_append(curl_headers, String("Accept: */*").ascii().get_data());
 	}
 
 	if (curl_headers) {
@@ -199,7 +172,7 @@ Error HTTPClientCurl::_init_request_headers(CURL *p_handle, const PackedStringAr
 }
 
 bool HTTPClientCurl::_has_response() const {
-	return current_request.is_valid() && current_request->headers.size();
+	return current_request.is_valid() && current_request->response_code;
 }
 
 bool HTTPClientCurl::_is_response_chunked() const {
@@ -267,7 +240,7 @@ Error HTTPClientCurl::_request(HTTPClient::Method p_method, const String &p_url,
 	CURL *eh = curl_easy_init();
 	curl_easy_setopt(eh, CURLOPT_URL, url.utf8().get_data());
 	curl_easy_setopt(eh, CURLOPT_CUSTOMREQUEST, methods[p_method]);
-	curl_easy_setopt(eh, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1); // Until we fix the state machine
+	curl_easy_setopt(eh, CURLOPT_HTTP_TRANSFER_DECODING, 0L);
 	bool is_head = p_method == HTTPClient::Method::METHOD_HEAD;
 	if (is_head) {
 		curl_easy_setopt(eh, CURLOPT_NOBODY, 1L);
@@ -383,14 +356,14 @@ Error HTTPClientCurl::_poll() {
 
 void HTTPClientCurl::_curl_transfer(int &running_handles) {
 	if (blocking_mode) {
-		int ready = 0;
-		CURLMcode rc = curl_multi_wait(curl, nullptr, 0, 1000, &ready);
-		if (!ready) {
+		int numfds = 0;
+		CURLMcode mc = curl_multi_wait(curl, nullptr, 0, 1000, &numfds);
+		if (mc != CURLM_OK) {
 			return;
 		}
 	}
 
-	CURLMcode rc = curl_multi_perform(curl, &running_handles);
+	CURLMcode mc = curl_multi_perform(curl, &running_handles);
 
 	struct CURLMsg *m;
 	do {
@@ -404,11 +377,6 @@ void HTTPClientCurl::_curl_transfer(int &running_handles) {
 			curl_multi_remove_handle(curl, eh);
 			curl_easy_cleanup(eh);
 			req->handle = nullptr;
-			if (req->status == CURLRequest::STATUS_HEADERS) {
-				// Headers only.
-				_parse_response_headers(req);
-				req->status = CURLRequest::STATUS_BODY;
-			}
 			if (req->status != CURLRequest::STATUS_BODY) {
 				// Error occurred.
 				req->error = true;
@@ -450,6 +418,12 @@ HTTPClient::Status HTTPClientCurl::_get_status() const {
 
 PackedByteArray HTTPClientCurl::_read_response_body_chunk() {
 	ERR_FAIL_COND_V(current_request.is_null() || current_request->status < CURLRequest::STATUS_BODY, PackedByteArray());
+	// Returning anything that was buffered while receiving headers
+	if (current_request->response->get_available_bytes()) {
+		PackedByteArray pba = current_request->response->get_data_array();
+		current_request->response->clear();
+		return pba;
+	}
 	int left = current_request->rb.data_left();
 	if (left == 0) {
 		int running_handles = 0;

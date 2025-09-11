@@ -70,7 +70,7 @@ private:
 			STATUS_COMPLETE,
 		};
 
-		int body_size = 0;
+		int body_size = -1;
 		int response_code = 0;
 		bool chunked = false;
 		bool head = false;
@@ -84,6 +84,7 @@ private:
 	};
 
 	static CharString system_cas;
+	static CharString user_agent;
 
 	static const char *methods[10];
 	static size_t _header_callback(char *buffer, size_t size, size_t nitems, void *userdata);
@@ -101,7 +102,6 @@ private:
 	int resolver_id = IP::RESOLVER_INVALID_ID;
 
 	Error _init_request_headers(CURL *p_handle, const PackedStringArray &p_headers, int p_clen);
-	static void _parse_response_headers(CURLRequest *p_request);
 	void _curl_transfer(int &running_handles);
 
 public:
