@@ -91,9 +91,9 @@ protected:
 
 private:
 	static const char *methods[HTTPClient::METHOD_MAX + 1];
-	static bool initialized;
 	static CharString system_cas;
 	static CharString user_agent;
+	static bool enable_http3;
 
 	static size_t _read_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata);
 	static size_t _header_callback(char *p_buffer, size_t p_size, size_t p_nitems, void *p_userdata);
@@ -108,7 +108,7 @@ private:
 	static HTTPClient2 *_create();
 
 public:
-	static void initialize();
+	static void initialize(bool p_enable_http3);
 	static void deinitialize();
 
 	virtual Ref<HTTPRequest2> fetch(const String &p_url, HTTPClient::Method p_method, const PackedStringArray &p_headers, const PackedByteArray &p_body) override;

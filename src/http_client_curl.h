@@ -85,6 +85,7 @@ private:
 
 	static CharString system_cas;
 	static CharString user_agent;
+	static bool enable_http3;
 
 	static const char *methods[10];
 	static size_t _header_callback(char *buffer, size_t size, size_t nitems, void *userdata);
@@ -105,7 +106,7 @@ private:
 	void _curl_transfer(int &running_handles);
 
 public:
-	static void initialize();
+	static void initialize(bool p_enable_http3);
 	static void deinitialize();
 
 	virtual Error _request(HTTPClient::Method p_method, const String &p_url, const PackedStringArray &p_headers, const uint8_t *p_body, int32_t p_body_size) override;

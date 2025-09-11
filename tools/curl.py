@@ -1,4 +1,4 @@
-def build_library(env, ssl, zlib, nghttp2):
+def build_library(env, ssl, zlib, nghttp2, nghttp3, ngtcp2):
     curl_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",
         "BUILD_CURL_EXE": 0,
@@ -28,7 +28,7 @@ def build_library(env, ssl, zlib, nghttp2):
         "NGHTTP2_LIBRARY": env["NGHTTP2_LIBRARY"],
         "NGHTTP2_INCLUDE_DIR": env["NGHTTP2_INCLUDE"],
         "CURL_STATIC_CRT": 1 if env.get("use_static_cpp", False) else 0,
-        "CMAKE_C_FLAGS": "-DNGHTTP2_STATICLIB",
+        "CMAKE_C_FLAGS": "-DNGHTTP2_STATICLIB -DNGHTTP3_STATICLIB -DNGTCP2_STATICLIB",
     }
 
     use_openssl = env.get("tls_library", "") == "openssl"
@@ -41,6 +41,7 @@ def build_library(env, ssl, zlib, nghttp2):
         curl_config["OPENSSL_SSL_LIBRARY"] = env["SSL_LIBRARY"]
         curl_config["OPENSSL_CRYPTO_LIBRARY"] = env["SSL_CRYPTO_LIBRARY"]
         curl_config["OPENSSL_ROOT_DIR"] = env["SSL_INSTALL"]
+        curl_config["HAVE_SSL_SET_QUIC_TLS_CBS"] = 1
     elif use_mbedtls:
         curl_config["CURL_USE_MBEDTLS"] = 1 if not use_openssl else 0
         curl_config["MBEDTLS_LIBRARY"] = env["MBEDTLS_LIBRARY"]
@@ -49,6 +50,15 @@ def build_library(env, ssl, zlib, nghttp2):
         curl_config["MBEDTLS_INCLUDE_DIR"] = env["MBEDTLS_INCLUDE"]
     else:
         raise ValueError("Invalid 'tls_library': " + env.get("tls_library", ""))
+
+    has_http3 = use_openssl
+    if has_http3:
+        curl_config["USE_NGTCP2"] = 1
+        curl_config["NGTCP2_LIBRARY"] = env["NGTCP2_LIBRARY"]
+        curl_config["NGTCP2_CRYPTO_OSSL_LIBRARY"] = env["NGTCP2_CRYPTO_LIBRARY"]
+        curl_config["NGTCP2_INCLUDE_DIR"] = env["NGTCP2_INCLUDE"]
+        curl_config["NGHTTP3_LIBRARY"] = env["NGHTTP3_LIBRARY"]
+        curl_config["NGHTTP3_INCLUDE_DIR"] = env["NGHTTP3_INCLUDE"]
 
     is_msvc = env.get("is_msvc", False)
     lib_ext = ".lib" if is_msvc else ".a"
@@ -62,7 +72,7 @@ def build_library(env, ssl, zlib, nghttp2):
         cmake_options=curl_config,
         cmake_outputs=curl_libs,
         cmake_targets=["libcurl_static"],
-        dependencies=ssl + zlib + nghttp2,
+        dependencies=ssl + zlib + nghttp2 + nghttp3 + ngtcp2,
     )
 
     # Configure env.
@@ -72,7 +82,14 @@ def build_library(env, ssl, zlib, nghttp2):
         env.PrependUnique(LIBS=["pthread"])
     env.Prepend(LIBS=list(filter(lambda f: str(f).endswith(lib_ext), curl)))
     env.Append(CPPPATH=[env.Dir("#thirdparty/curl/include")])
-    env.Append(CPPDEFINES=["CURL_STATICLIB", "NGHTTP2_STATICLIB"])  # For Windows
+    env.Append(
+        CPPDEFINES=[
+            "CURL_STATICLIB",
+            "NGHTTP2_STATICLIB",
+            "NGHTTP3_STATICLIB",
+            "NGTCP2_STATICLIB",
+        ]
+    )
 
     return curl
 

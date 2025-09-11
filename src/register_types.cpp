@@ -30,6 +30,7 @@
 
 #include <gdextension_interface.h>
 
+#include "godot_cpp/classes/project_settings.hpp"
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/defs.hpp>
@@ -64,6 +65,19 @@ void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
 		curl_ok = true;
 	}
 
+	bool enable_http3 = false;
+	ProjectSettings *ps = ProjectSettings::get_singleton();
+	if (ps) {
+#define SETTING_KEY "network/curl/enable_http3"
+		if (!ps->has_setting(SETTING_KEY)) {
+			ps->set_setting(SETTING_KEY, enable_http3);
+		}
+		ps->set_restart_if_changed(SETTING_KEY, true);
+		ps->set_initial_value(SETTING_KEY, enable_http3);
+		enable_http3 = ProjectSettings::get_singleton()->get_setting(SETTING_KEY).operator bool();
+#undef SETTING_KEY
+	}
+
 #ifdef HTTP_CLIENT_EXTENSION_COMPAT
 	GDREGISTER_ABSTRACT_CLASS(TLSOptionsCompat);
 	GDREGISTER_ABSTRACT_CLASS(HTTPClientExtensionCompat);
@@ -72,11 +86,11 @@ void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
 	GDREGISTER_ABSTRACT_CLASS(HTTPClient2);
 	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2);
 
-	HTTPClient2Curl::initialize();
+	HTTPClient2Curl::initialize(enable_http3);
 	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2Curl); // TODO Not needed?
 	GDREGISTER_CLASS(HTTPClient2Curl);
 
-	HTTPClientCurl::initialize();
+	HTTPClientCurl::initialize(enable_http3);
 	GDREGISTER_CLASS(HTTPClientCurl);
 #ifndef HTTP_CLIENT_EXTENSION_COMPAT
 	if (!Engine::get_singleton()->is_editor_hint()) {
