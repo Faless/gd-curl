@@ -40,8 +40,8 @@
 
 namespace godot {
 
-CharString HTTPClient2Curl::system_cas = "";
-CharString HTTPClient2Curl::user_agent = "";
+CharString HTTPClient2Curl::system_cas;
+CharString HTTPClient2Curl::user_agent;
 bool HTTPClient2Curl::initialized = false;
 
 PackedStringArray HTTPRequest2Curl::get_headers() const {
