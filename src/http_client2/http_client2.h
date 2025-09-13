@@ -61,8 +61,15 @@ protected:
 	static void _bind_methods();
 
 public:
+	enum ProxyType {
+		PROXY_TYPE_HTTP,
+		PROXY_TYPE_HTTPS,
+		PROXY_TYPE_MAX,
+	};
+
 	static Ref<HTTPClient2> create();
 
+	virtual void set_proxy(ProxyType p_proxy_type, const String &p_proxy) {}
 	virtual Ref<TLSOptions> get_tls_options() const { return tls_options; }
 	virtual void set_tls_options(Ref<TLSOptions> p_tls) { tls_options = p_tls; }
 
@@ -74,3 +81,5 @@ public:
 };
 
 }; // namespace godot
+
+VARIANT_ENUM_CAST(HTTPClient2::ProxyType);

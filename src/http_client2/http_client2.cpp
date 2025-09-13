@@ -54,9 +54,14 @@ void HTTPClient2::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("fetch", "url", "method", "headers", "request_data"), &HTTPClient2::fetch, DEFVAL(HTTPClient::METHOD_GET), DEFVAL(PackedStringArray()), DEFVAL(PackedByteArray()));
 	ClassDB::bind_method(D_METHOD("cancel", "id"), &HTTPClient2::cancel);
 	ClassDB::bind_method(D_METHOD("poll"), &HTTPClient2::poll);
+	ClassDB::bind_method(D_METHOD("set_proxy", "type", "proxy"), &HTTPClient2::set_proxy);
 	ClassDB::bind_method(D_METHOD("set_tls_options", "tls_options"), &HTTPClient2::set_tls_options);
 	ClassDB::bind_method(D_METHOD("get_tls_options"), &HTTPClient2::get_tls_options);
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "tls_options", PROPERTY_HINT_RESOURCE_TYPE, "TLSOptions"), "set_tls_options", "get_tls_options");
+
+	BIND_ENUM_CONSTANT(PROXY_TYPE_HTTP);
+	BIND_ENUM_CONSTANT(PROXY_TYPE_HTTPS);
+	BIND_ENUM_CONSTANT(PROXY_TYPE_MAX);
 }
 
 }; //namespace godot

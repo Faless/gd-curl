@@ -39,6 +39,7 @@
 #include "http_client_curl.h"
 
 #include "http_client2/http_client2_curl.h"
+#include "http_client2/http_client2_tcp.h"
 
 #ifdef HTTP_CLIENT_EXTENSION_COMPAT
 #include "compat/http_request.hpp"
@@ -89,6 +90,9 @@ void register_gdcurl_extension_types(ModuleInitializationLevel p_level) {
 	HTTPClient2Curl::initialize(enable_http3);
 	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2Curl); // TODO Not needed?
 	GDREGISTER_CLASS(HTTPClient2Curl);
+
+	GDREGISTER_ABSTRACT_CLASS(HTTPRequest2TCP); // TODO Not needed?
+	GDREGISTER_CLASS(HTTPClient2TCP);
 
 	HTTPClientCurl::initialize(enable_http3);
 	GDREGISTER_CLASS(HTTPClientCurl);

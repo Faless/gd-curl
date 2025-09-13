@@ -5,6 +5,8 @@
 		"ProjectSettings",
 		"HTTPClientExtension",
 		"StreamPeerBuffer",
+		"StreamPeerTCP",
+		"StreamPeerTLS",
 		"StreamPeerGZIP",
 		"Node",
 		"OS",
