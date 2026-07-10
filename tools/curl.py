@@ -1,6 +1,7 @@
 def build_library(env, ssl, zlib, nghttp2, nghttp3, ngtcp2):
     curl_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",
+        "CURL_STATIC_CRT": 1 if env.get("use_static_cpp", False) else 0,
         "BUILD_CURL_EXE": 0,
         "BUILD_SHARED_LIBS": 0,
         "BUILD_STATIC_LIBS": 1,
@@ -11,6 +12,7 @@ def build_library(env, ssl, zlib, nghttp2, nghttp3, ngtcp2):
         "BUILD_MISC_DOCS": 0,
         "ENABLE_CURL_MANUAL": 0,
         "CURL_DISABLE_OPENSSL_AUTO_LOAD_CONFIG": 0,  # Should this be 1? Nah, probably use mbedTLS in the long run!
+        "CURL_DISABLE_TESTS": 1,
         "ENABLE_UNIX_SOCKETS": 0,
         "CURL_CA_BUNDLE": "none",
         "CURL_CA_PATH": "none",
@@ -18,16 +20,18 @@ def build_library(env, ssl, zlib, nghttp2, nghttp3, ngtcp2):
         "CURL_USE_LIBPSL": 0,  # Thanks IANA.
         "USE_LIBIDN2": 0,  # GPL
         "CMAKE_POSITION_INDEPENDENT_CODE": 1,
+        "CMAKE_DISABLE_FIND_PACKAGE_ZSTD": 1,
         "CURL_USE_PKGCONFIG": 0,
         "CURL_BROTLI": 0,
         "CURL_ZSTD": 0,
+        # zlib
         "CURL_ZLIB": 1,
         "ZLIB_LIBRARY": env["ZLIB_LIBRARY"],
         "ZLIB_INCLUDE_DIR": env["ZLIB_INCLUDE"],
+        # nghttp2
         "USE_NGHTTP2": 1,
         "NGHTTP2_LIBRARY": env["NGHTTP2_LIBRARY"],
         "NGHTTP2_INCLUDE_DIR": env["NGHTTP2_INCLUDE"],
-        "CURL_STATIC_CRT": 1 if env.get("use_static_cpp", False) else 0,
         "CMAKE_C_FLAGS": "-DNGHTTP2_STATICLIB -DNGHTTP3_STATICLIB -DNGTCP2_STATICLIB",
     }
 
@@ -80,6 +84,8 @@ def build_library(env, ssl, zlib, nghttp2, nghttp3, ngtcp2):
         env.PrependUnique(LIBS=["ws2_32", "bcrypt", "advapi32", "iphlpapi"])
     if env["platform"] == "linux":
         env.PrependUnique(LIBS=["pthread"])
+    if env["platform"] == "macos":
+        env.Append(LINKFLAGS=["-framework", "CoreFoundation", "-framework", "SystemConfiguration"])
     env.Prepend(LIBS=list(filter(lambda f: str(f).endswith(lib_ext), curl)))
     env.Append(CPPPATH=[env.Dir("#thirdparty/curl/include")])
     env.Append(

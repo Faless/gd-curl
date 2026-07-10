@@ -1,6 +1,5 @@
 def build_library(env):
-    nghttp2_bin = env.Dir("#bin/thirdparty/nghttp2/{}/{}/install".format(env["platform"], env["arch"]))
-    is_msvc = env.get("is_msvc", False)
+    nghttp2_bin = env.Dir("bin/thirdparty/nghttp2/{}/{}/install".format(env["platform"], env["arch"]))
     nghttp2_config = {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo" if env["debug_symbols"] else "Release",
         "BUILD_TESTING": 0,
@@ -34,8 +33,8 @@ def build_library(env):
         "CMAKE_DISABLE_FIND_PACKAGE_Jemalloc": 1,
         "CMAKE_DISABLE_FIND_PACKAGE_Python3": 1,
     }
-    lib_ext = ".lib" if is_msvc else ".a"
-    lib_prefix = "" if is_msvc else "lib"
+    lib_ext = ".lib" if env.msvc else ".a"
+    lib_prefix = "" if env.msvc else "lib"
     nghttp2_libs = [
         "/install/lib/{}nghttp2{}".format(lib_prefix, lib_ext),
     ]
@@ -56,15 +55,15 @@ def build_library(env):
 
     # Build libdatachannel
     nghttp2 = env.CMakeBuild(
-        env.Dir("#bin/thirdparty/nghttp2/"),
-        env.Dir("#thirdparty/nghttp2"),
+        env.Dir("bin/thirdparty/nghttp2/"),
+        env.Dir("thirdparty/nghttp2"),
         cmake_targets=["nghttp2_static"],
         cmake_options=nghttp2_config,
         cmake_outputs=nghttp2_libs + nghttp2_cmake_config + nghttp2_includes,
         install=True,
     )
     env.Prepend(LIBS=list(filter(lambda f: str(f).endswith(lib_ext), nghttp2)))
-    env.Append(CPPPATH=[env.Dir("#thirdparty/nghttp2/include")])
+    env.Append(CPPPATH=[env.Dir("thirdparty/nghttp2/include")])
 
     return nghttp2
 
@@ -74,10 +73,9 @@ def exists(env):
 
 
 def generate(env):
-    nghttp2_install_dir = "#bin/thirdparty/nghttp2/{}/{}/install".format(env["platform"], env["arch"])
-    is_msvc = env.get("is_msvc", False)
-    lib_prefix = "" if is_msvc else "lib"
-    lib_ext = ".lib" if env.get("is_msvc", False) else ".a"
+    nghttp2_install_dir = "bin/thirdparty/nghttp2/{}/{}/install".format(env["platform"], env["arch"])
+    lib_prefix = "" if env.msvc else "lib"
+    lib_ext = ".lib" if env.msvc else ".a"
     nghttp2 = env.File(nghttp2_install_dir + "/lib/{}nghttp2{}".format(lib_prefix, lib_ext))
     includes = env.Dir(nghttp2_install_dir + "/include")
     env.AddMethod(build_library, "BuildNGHTTP2")

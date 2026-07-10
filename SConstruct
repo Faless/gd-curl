@@ -42,6 +42,8 @@ cpp_env = SConscript(sconstruct)
 env = cpp_env.Clone()
 opts.Update(env)
 
+env.__class__.msvc = env.get("is_msvc", False)
+
 result_path = os.path.join("bin", "addons", "gdcurl")
 
 # Our includes and sources

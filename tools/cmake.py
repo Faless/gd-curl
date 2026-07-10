@@ -16,12 +16,22 @@ def cmake_default_flags(env):
     if env.get("cmake_default_flags", ""):
         return shlex.split(env["cmake_default_flags"])
 
-    config = {}
+    opt_level = env.get("optimize", "")
+    config = {
+        "CMAKE_BUILD_TYPE": "RELWITHDEBINFO"
+        if env.get("debug_symbols", True)
+        else ("MINSIZEREL" if opt_level == "size" else "RELEASE")
+    }
+
+    if env.get("lto", "none") != "none":
+        config["CMAKE_INTERPROCEDURAL_OPTIMIZATION"] = "1"
 
     if "CC" in env:
-        config["CMAKE_C_COMPILER"] = env["CC"]
+        config["CMAKE_C_COMPILER"] = env["CC"] if os.name != "nt" else env.subst("$CC").replace("\\", "/") + ".exe"
     if "CXX" in env:
-        config["CMAKE_CXX_COMPILER"] = env["CXX"]
+        config["CMAKE_CXX_COMPILER"] = env["CXX"] if os.name != "nt" else env.subst("$CXX").replace("\\", "/") + ".exe"
+    if "RC" in env:
+        config["CMAKE_RC_COMPILER"] = env["RC"] if os.name != "nt" else env.subst("$RC").replace("\\", "/") + ".exe"
 
     if env["platform"] == "android":
         api = env["android_api_level"]
@@ -33,15 +43,16 @@ def cmake_default_flags(env):
         }[env["arch"]]
         config["CMAKE_SYSTEM_NAME"] = "Android"
         config["CMAKE_SYSTEM_VERSION"] = api
+        config["ANDROID_PLATFORM"] = "android-" + api
         config["CMAKE_ANDROID_ARCH_ABI"] = abi
-        config["ANDROID_PLATFORM"] = api
         config["ANDROID_ABI"] = abi
         ndk_root = os.environ.get("ANDROID_NDK_ROOT", env.get("ANDROID_HOME", "") + "/ndk/" + get_ndk_version())
-        config["ANDROID_USE_LEGACY_TOOLCHAIN_FILE"] = 0
         config["CMAKE_TOOLCHAIN_FILE"] = "%s/build/cmake/android.toolchain.cmake" % ndk_root
         config["CMAKE_ANDROID_STL_TYPE"] = "c++_static"
 
     elif env["platform"] == "linux":
+        config["CMAKE_SYSTEM_NAME"] = "Linux"
+        config["CMAKE_SYSTEM_PROCESSOR"] = env["arch"]
         linux_flags = {
             "x86_64": "-m64",
             "x86_32": "-m32",
@@ -53,10 +64,12 @@ def cmake_default_flags(env):
             config["CMAKE_CXX_FLAGS"] = linux_flags
 
     elif env["platform"] == "macos":
+        config["CMAKE_SYSTEM_NAME"] = "Darwin"
         if env["arch"] == "universal":
             config["CMAKE_OSX_ARCHITECTURES"] = '"x86_64;arm64"'
         else:
             config["CMAKE_OSX_ARCHITECTURES"] = env["arch"]
+            config["CMAKE_SYSTEM_PROCESSOR"] = env["arch"]
         if env.get("macos_deployment_target", "default") != "default":
             config["CMAKE_OSX_DEPLOYMENT_TARGET"] = env["macos_deployment_target"]
         if sys.platform != "darwin" and "OSXCROSS_ROOT" in os.environ:
@@ -75,19 +88,31 @@ def cmake_default_flags(env):
         if env["arch"] == "universal":
             raise ValueError("iOS architecture not supported: %s" % env["arch"])
         config["CMAKE_SYSTEM_NAME"] = "iOS"
+        config["CMAKE_SYSTEM_PROCESSOR"] = env["arch"]
         config["CMAKE_OSX_ARCHITECTURES"] = env["arch"]
         if env.get("ios_min_version", "default") != "default":
             config["CMAKE_OSX_DEPLOYMENT_TARGET"] = env["ios_min_version"]
-        if env["ios_simulator"]:
+        if env.get("simulator", env.get("ios_simulator", False)):
             config["CMAKE_OSX_SYSROOT"] = "iphonesimulator"
 
     elif env["platform"] == "windows":
         config["CMAKE_SYSTEM_NAME"] = "Windows"
+        config["CMAKE_SYSTEM_PROCESSOR"] = env["arch"]
+        if env.msvc:
+            config["CMAKE_POLICY_DEFAULT_CMP0091"] = "NEW"
+            if env.get("debug_crt", False):
+                config["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreadedDebugDLL"
+            else:
+                if env.get("use_static_cpp", False):
+                    config["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreaded"
+                else:
+                    config["CMAKE_MSVC_RUNTIME_LIBRARY"] = "MultiThreadedDLL"
 
     return ["-D%s=%s" % it for it in config.items()]
 
 
 def cmake_emitter(target, source, env):
+    env.SideEffect(env["CMAKELOCK"], target)
     return [str(target[0]) + "/CMakeCache.txt"] + target[1:], [str(source[0]) + "/CMakeLists.txt"] + source[1:]
 
 
@@ -123,7 +148,10 @@ def cmake_build(
         else:
             f = df[2:].split("=")[0]
             if f in cmake_options:
-                df += " " + cmake_options[f]
+                if f == "CMAKE_BUILD_TYPE":
+                    df = "-DCMAKE_BUILD_TYPE=" + cmake_options[f]
+                else:
+                    df += " " + cmake_options[f]
                 cmake_options.pop(f)
             flags.append(df)
     for opt in cmake_options:
@@ -131,9 +159,9 @@ def cmake_build(
 
     # Select generator
     if env["cmake_generator"]:
-        flags.extend(["-G", env["CMAKEGENERATOR"]])
+        flags.extend(["-G", env["cmake_generator"]])
     elif env["platform"] == "windows":
-        if env.get("is_msvc", False):
+        if env.msvc:
             flags.extend(["-G", "NMake Makefiles"])
         elif sys.platform in ["win32", "msys", "cygwin"]:
             flags.extend(["-G", "Ninja"])
@@ -151,6 +179,7 @@ def options(opts):
     opts.Add("cmake_default_flags", "Default CMake platform flags override, will be autodetected if not specified.", "")
     opts.Add("cmake_generator", "CMake generator override, will be autodetected from platform if not specified.", "")
     opts.Add("cmake", "CMake binary to use", "cmake")
+    opts.Add("emcmake", "Emscripten's cmake configuration helper to use (only in web builds)", "emcmake")
 
 
 def exists(env):
@@ -159,12 +188,17 @@ def exists(env):
 
 def generate(env):
     env["CMAKE"] = env["cmake"]
+    env["EMCMAKE"] = env["emcmake"]
     env["CMAKECONFFLAGS"] = SCons.Util.CLVar("")
     env["CMAKECONFCOM"] = "$CMAKE -B ${TARGET.dir} $CMAKECONFFLAGS ${SOURCE.dir}"
+    if env.get("platform", "") == "web":
+        env["CMAKECONFCOM"] = "$EMCMAKE " + env["CMAKECONFCOM"]
+
     env["CMAKEBUILDJOBS"] = "${__env__.GetOption('num_jobs')}"
     env["CMAKEBUILDFLAGS"] = SCons.Util.CLVar("")
     env["CMAKEINSTALLFLAGS"] = SCons.Util.CLVar("")
     env["CMAKEBUILDCOM"] = "$CMAKE --build ${TARGET.dir} $CMAKEBUILDFLAGS -j$CMAKEBUILDJOBS"
     env["CMAKEINSTALLCOM"] = "$CMAKE --install ${TARGET.dir} $CMAKEINSTALLFLAGS"
     env["BUILDERS"]["CMake"] = SCons.Builder.Builder(generator=cmake_generator, emitter=cmake_emitter)
+    env["CMAKELOCK"] = "#bin/cmake.lock"
     env.AddMethod(cmake_build, "CMakeBuild")
